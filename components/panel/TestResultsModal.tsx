@@ -1,247 +1,243 @@
 'use client'
 // components/panel/TestResultsModal.tsx
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, User, Calendar, MessageSquare, CheckCircle, Download } from 'lucide-react'
-
-// @react-pdf/renderer — client only, dinamik import ile SSR bypass
-let pdfLib: typeof import('@react-pdf/renderer') | null = null
-async function getPdfLib() {
-  if (!pdfLib) {
-    pdfLib = await import('@react-pdf/renderer')
-    pdfLib.Font.register({
-      family: 'Roboto',
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-light-webfont.ttf',
-    })
-  }
-  return pdfLib
-}
-
-// PDF styles — lazy loaded in generatePDF()
-
-interface TestResponse {
-  id: string
-  test_id: string
-  client_id: string | null
-  respondent_name: string | null
-  answers: { question_index: number; option_index?: number; answer_text?: string; answer_number?: number; answer_boolean?: boolean | null }[]
-  total_score: number | null
-  completed_at: string
-}
-
-interface TestQuestion {
-  text: string
-  type: 'multiple_choice' | 'text' | 'scale' | 'true_false'
-  options: { label: string }[]
-}
+import type { Test, TestResponse, TestQuestion } from '@/lib/types'
 
 interface Props {
-  isOpen: boolean
-  onClose: () => void
-  test: {
-    id: string
-    title: string
-    description: string | null
-    slug: string
-    questions: TestQuestion[]
-  }
-  responses: TestResponse[]
-  profileSlug?: string
+  test:        Test
+  responses:   TestResponse[]
+  onClose:     () => void
 }
 
-// Helper function to get answer text
-const getAnswerText = (answer: any, question: TestQuestion) => {
-  if (question.type === 'multiple_choice' && answer.option_index !== undefined) {
-    return question.options[answer.option_index]?.label || 'Seçenek bulunamadı'
-  } else if (question.type === 'text' && answer.answer_text) {
-    return answer.answer_text
-  } else if (question.type === 'scale' && answer.answer_number !== undefined) {
-    return `${answer.answer_number}/10`
-  } else if (question.type === 'true_false' && answer.answer_boolean !== undefined) {
-    return answer.answer_boolean ? 'Doğru' : 'Yanlış'
+function getAnswerText(
+  answer: { question_index: number; option_index: number; score: number },
+  question: TestQuestion
+): string {
+  if (question.options && question.options[answer.option_index]) {
+    return question.options[answer.option_index].label
   }
-  return 'Cevap bulunamadı'
+  return String(answer.option_index)
 }
 
+export default function TestResultsModal({ test, responses, onClose }: Props) {
+  const [selectedResponse, setSelectedResponse] = useState<TestResponse | null>(
+    responses[0] ?? null
+  )
+  const [generating, setGenerating] = useState(false)
 
-export default function TestResultsModal({ isOpen, onClose, test, responses, profileSlug }: Props) {
-  const [selectedResponse, setSelectedResponse] = useState<TestResponse | null>(null)
+  // ESC ile kapat
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
 
-  // PDF oluşturma fonksiyonu
-  const generatePDF = async () => {
+  async function generatePDF() {
     if (!selectedResponse) return
+    setGenerating(true)
+    try {
+      // Dynamic import — client-only, SSR'da çalışmaz
+      const { pdf, Document, Page, Text, View, StyleSheet, Font } =
+        await import('@react-pdf/renderer')
 
-    const { pdf: pdfFn, Document: Doc, Page: Pg, Text: Txt, View: Vw, StyleSheet: SS } = await getPdfLib()
+      // Font kaydı (sadece ilk çalışmada)
+      try {
+        Font.register({
+          family: 'Roboto',
+          src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-light-webfont.ttf',
+        })
+      } catch {
+        // Zaten kayıtlıysa hata verebilir — yoksay
+      }
 
-    const styles = SS.create({
-      page: { flexDirection: 'column', backgroundColor: '#FFFFFF', padding: 20 },
-      title: { fontSize: 18, marginBottom: 15, fontWeight: 'bold' },
-      subtitle: { fontSize: 12, marginBottom: 8 },
-      sectionTitle: { fontSize: 14, marginBottom: 12, fontWeight: 'bold' },
-      question: { fontSize: 11, marginBottom: 6, fontWeight: 'bold' },
-      answer: { fontSize: 10, marginBottom: 8, marginLeft: 10 },
-    })
+      const styles = StyleSheet.create({
+        page:         { flexDirection: 'column', backgroundColor: '#FFFFFF', padding: 24 },
+        title:        { fontSize: 18, marginBottom: 12, fontWeight: 'bold' },
+        subtitle:     { fontSize: 11, marginBottom: 6, color: '#555' },
+        sectionTitle: { fontSize: 13, marginBottom: 10, fontWeight: 'bold', marginTop: 12 },
+        question:     { fontSize: 10, marginBottom: 4, fontWeight: 'bold' },
+        answer:       { fontSize: 10, marginBottom: 8, marginLeft: 10, color: '#333' },
+        row:          { marginBottom: 8 },
+      })
 
-    const PdfDoc = () => (
-      <Doc>
-        <Pg size="A4" style={styles.page}>
-          <Txt style={styles.title}>{test.title}</Txt>
-          <Txt style={styles.subtitle}>Kullanıcı: {selectedResponse.respondent_name || 'Misafir'}</Txt>
-          <Txt style={styles.subtitle}>Tarih: {new Date(selectedResponse.completed_at).toLocaleDateString('tr-TR')}</Txt>
-          <Txt style={styles.sectionTitle}>Sorular ve Cevaplar:</Txt>
-          {test.questions.map((question, index) => {
-            const answer = selectedResponse.answers.find((a: any) => a.question_index === index)
-            return (
-              <Vw key={index} style={{ marginBottom: 8 }}>
-                <Txt style={styles.question}>{index + 1}. {question.text}</Txt>
-                <Txt style={styles.answer}>Cevap: {answer ? getAnswerText(answer, question) : 'Cevaplanmamış'}</Txt>
-              </Vw>
-            )
-          })}
-        </Pg>
-      </Doc>
-    )
+      const PdfDoc = () => (
+        <Document>
+          <Page size="A4" style={styles.page}>
+            <Text style={styles.title}>{test.title}</Text>
+            <Text style={styles.subtitle}>
+              Kullanıcı: {selectedResponse.respondent_name ?? 'Misafir'}
+            </Text>
+            <Text style={styles.subtitle}>
+              Tarih: {new Date(selectedResponse.completed_at).toLocaleDateString('tr-TR')}
+            </Text>
+            {selectedResponse.total_score !== null && (
+              <Text style={styles.subtitle}>
+                Toplam Puan: {selectedResponse.total_score}
+              </Text>
+            )}
+            <Text style={styles.sectionTitle}>Sorular ve Cevaplar</Text>
+            {test.questions.map((question, index) => {
+              const answer = selectedResponse.answers.find(
+                (a: { question_index: number; option_index: number; score: number }) =>
+                  a.question_index === index
+              )
+              return (
+                <View key={index} style={styles.row}>
+                  <Text style={styles.question}>
+                    {index + 1}. {question.text}
+                  </Text>
+                  <Text style={styles.answer}>
+                    Cevap: {answer ? getAnswerText(answer, question) : 'Cevaplanmadi'}
+                  </Text>
+                </View>
+              )
+            })}
+          </Page>
+        </Document>
+      )
 
-    const blob = await pdfFn(<PdfDoc />).toBlob()
-    
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${test.title}_${selectedResponse.respondent_name || 'misafir'}.pdf`
-    link.click()
-    URL.revokeObjectURL(url)
+      const blob = await pdf(<PdfDoc />).toBlob()
+      const url  = URL.createObjectURL(blob)
+      const link = Object.assign(document.createElement('a'), {
+        href:     url,
+        download: `${test.slug}-sonuc.pdf`,
+      })
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('PDF olusturulamadi:', err)
+      alert('PDF olusturulurken bir hata olustu.')
+    } finally {
+      setGenerating(false)
+    }
   }
-
-  // Debug: Veri yapısını kontrol et
-
-  if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-xl flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="px-4 md:px-6 py-4 border-b border-border flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between flex-shrink-0">
           <div>
-            <h3 className="font-semibold text-sm md:text-base">{test.title}</h3>
-            <p className="text-sm text-muted">Test Sonuçları</p>
+            <h2 className="font-semibold">{test.title}</h2>
+            <p className="text-xs text-muted">{responses.length} yanıt</p>
           </div>
-          <button 
+          <button
             onClick={onClose}
-            className="text-muted text-xl leading-none hover:text-charcoal"
+            className="w-8 h-8 rounded-lg hover:bg-cream flex items-center justify-center text-muted"
           >
-            ×
+            <X size={16} />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-4 md:p-6">
-          {responses.length === 0 ? (
-            <div className="text-center py-8 text-sm text-muted">
-              Bu test için henüz sonuç bulunmuyor.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-              {/* Responses List */}
-              <div className="lg:col-span-1">
-                <h4 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">Dolduran Kişiler</h4>
-                <div className="space-y-2">
-                  {responses.map((response) => (
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
+          {/* Yanıt listesi */}
+          <div className="md:w-56 flex-shrink-0 border-b md:border-b-0 md:border-r border-border overflow-y-auto">
+            {responses.length === 0 ? (
+              <p className="p-4 text-sm text-muted">Henuz yanit yok.</p>
+            ) : (
+              <ul>
+                {responses.map(r => (
+                  <li key={r.id}>
                     <button
-                      key={response.id}
-                      onClick={() => setSelectedResponse(response)}
-                      className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                        selectedResponse?.id === response.id
-                          ? 'border-sage bg-sage-pale'
-                          : 'border-border hover:border-sage hover:bg-sage-pale/50'
-                      }`}
+                      onClick={() => setSelectedResponse(r)}
+                      className={`w-full text-left px-4 py-3 border-b border-border/40 last:border-0 hover:bg-cream/50 transition-colors
+                        ${selectedResponse?.id === r.id ? 'bg-sage-pale' : ''}`}
                     >
-                      <div className="flex items-center gap-2 mb-1">
-                        <User className="w-4 h-4 text-muted" />
-                        <span className="font-medium text-sm truncate">
-                          {response.respondent_name || 'Misafir'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted">
-                        <Calendar className="w-3 h-3" />
-                        <span>{new Date(response.completed_at).toLocaleDateString('tr-TR')}</span>
-                      </div>
+                      <p className="text-xs font-medium truncate">
+                        {r.respondent_name ?? 'Misafir'}
+                      </p>
+                      <p className="text-[10px] text-muted mt-0.5">
+                        {new Date(r.completed_at).toLocaleDateString('tr-TR')}
+                      </p>
+                      {r.total_score !== null && (
+                        <p className="text-[10px] font-semibold text-sage mt-0.5">
+                          Puan: {r.total_score}
+                        </p>
+                      )}
                     </button>
-                  ))}
-                </div>
-              </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
-              {/* Selected Response Details */}
-              <div className="lg:col-span-2">
-                {selectedResponse ? (
-                  <div className="space-y-6">
-                    {/* Response Header */}
-                    <div className="bg-gray-50 rounded-lg p-3 md:p-4">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-sage-pale flex items-center justify-center">
-                          <User className="w-4 h-4 md:w-5 md:h-5 text-sage" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h5 className="font-semibold text-sm md:text-base truncate">
-                            {selectedResponse.respondent_name || 'Misafir'}
-                          </h5>
-                          <p className="text-xs md:text-sm text-muted">
-                            {new Date(selectedResponse.completed_at).toLocaleDateString('tr-TR')} · 
-                            {new Date(selectedResponse.completed_at).toLocaleTimeString('tr-TR')}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Questions and Answers */}
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-semibold text-muted uppercase tracking-wide">
-                          Sorular ve Cevaplar
-                        </h4>
-                        <button
-                          onClick={generatePDF}
-                          disabled={!selectedResponse}
-                          className="btn-outline py-1 px-3 text-xs flex items-center gap-1 disabled:opacity-50"
-                        >
-                          <Download className="w-3 h-3" />
-                          PDF İndir
-                        </button>
-                      </div>
-                      <div className="space-y-4">
-                        {test.questions.map((question, index) => {
-                          const answer = selectedResponse.answers.find(a => a.question_index === index)
-                          return (
-                            <div key={index} className="border border-border rounded-lg p-3 md:p-4">
-                              <div className="flex items-start gap-3">
-                                <div className="w-6 h-6 rounded-full bg-sage-pale flex items-center justify-center flex-shrink-0 mt-0.5">
-                                  <span className="text-xs font-bold text-sage">{index + 1}</span>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-sm mb-2 break-words">{question.text}</p>
-                                  <div className="bg-gray-50 rounded-lg p-2 md:p-3">
-                                    <div className="flex items-center gap-2">
-                                      <MessageSquare className="w-4 h-4 text-muted flex-shrink-0" />
-                                      <span className="text-sm break-words">
-                                        {answer ? getAnswerText(answer, question) : 'Cevaplanmamış'}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
+          {/* Yanıt detayı */}
+          <div className="flex-1 overflow-y-auto p-5">
+            {!selectedResponse ? (
+              <p className="text-sm text-muted text-center py-8">Bir yanıt seçin</p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-semibold flex items-center gap-1.5">
+                      <User size={13} className="text-muted" />
+                      {selectedResponse.respondent_name ?? 'Misafir'}
+                    </p>
+                    <p className="text-xs text-muted flex items-center gap-1.5">
+                      <Calendar size={11} />
+                      {new Date(selectedResponse.completed_at).toLocaleString('tr-TR')}
+                    </p>
                   </div>
-                ) : (
-                  <div className="text-center py-8 text-sm text-muted">
-                    Sonuçları görüntülemek için bir kişi seçin.
+                  <button
+                    onClick={generatePDF}
+                    disabled={generating}
+                    className="btn-outline py-1.5 px-3 text-xs flex items-center gap-1.5 disabled:opacity-60"
+                  >
+                    <Download size={12} />
+                    {generating ? 'Hazırlanıyor…' : 'PDF İndir'}
+                  </button>
+                </div>
+
+                {selectedResponse.total_score !== null && (
+                  <div className="bg-sage-pale rounded-xl px-4 py-3 mb-4 flex items-center gap-2">
+                    <CheckCircle size={16} className="text-sage" />
+                    <span className="text-sm font-semibold text-sage">
+                      Toplam Puan: {selectedResponse.total_score}
+                    </span>
                   </div>
                 )}
-              </div>
-            </div>
-          )}
+
+                <div className="space-y-4">
+                  {test.questions.map((q, i) => {
+                    const answer = selectedResponse.answers.find(
+                      (a: { question_index: number; option_index: number; score: number }) =>
+                        a.question_index === i
+                    )
+                    return (
+                      <div key={i} className="border border-border/60 rounded-xl p-4">
+                        <p className="text-xs font-semibold mb-2 text-charcoal">
+                          {i + 1}. {q.text}
+                        </p>
+                        {answer ? (
+                          <div className="flex items-center gap-2">
+                            <span className="pill-green text-xs">
+                              <MessageSquare size={10} className="inline mr-1" />
+                              {getAnswerText(answer, q)}
+                            </span>
+                            {answer.score !== undefined && (
+                              <span className="text-xs text-muted">
+                                ({answer.score} puan)
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted">Cevaplanmadı</span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

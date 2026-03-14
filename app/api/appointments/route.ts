@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 // app/api/appointments/route.ts
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
@@ -301,7 +302,7 @@ export async function DELETE(req: Request) {
 // istek süresi (durationMin) dikkate alınarak ±(dur/2) dakikalık pencere kontrol edilir.
 // Örn: 50 dk'lık seans → ±25 dk = 09:00 randevusu için 08:35-09:25 arası dolu sayılır.
 async function checkConflict(
-  supabase: Awaited<ReturnType<typeof import('@/lib/supabase/server').createClient>>,
+  supabase: SupabaseClient,
   psychologistId: string,
   startsAt: string,
   durationMin: number

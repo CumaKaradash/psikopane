@@ -5,12 +5,10 @@
 
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
-import type { BookingContext, PublicProfile } from '@/lib/types'
+import type { BookingContext } from '@/lib/types'
 
 interface Props {
   ctx: BookingContext
-  /** Geriye dönük uyumluluk — sadece bireysel profil için kullanılabilir */
-  profile?: PublicProfile
 }
 
 const DEFAULT_SESSION_TYPES = ['Bireysel Terapi', 'İlk Görüşme', 'Online Seans']
@@ -41,14 +39,9 @@ function urlBase64ToUint8Array(b64: string): Uint8Array {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-export default function BookingForm({ ctx, profile: legacyProfile }: Props) {
+export default function BookingForm({ ctx }: Props) {
   // Geriye dönük uyumluluk: eski `profile` prop'u gelirse ctx'e dönüştür
-  const resolvedCtx: BookingContext = ctx ?? {
-    type:        'individual',
-    profile:     legacyProfile!,
-    team:        null,
-    teamMembers: null,
-  }
+  const resolvedCtx: BookingContext = ctx
 
   const isTeam   = resolvedCtx.type === 'team'
   const teamData = isTeam ? resolvedCtx.team        : null
