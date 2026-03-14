@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 // app/api/tests/route.ts
 
 import { createClient } from '@/lib/supabase/server'
@@ -14,7 +15,7 @@ function toSlug(text: string): string {
 
 // ── Benzersiz slug üretici (DB çakışmasına karşı retry) ──────────────────────
 async function generateUniqueSlug(
-  supabase: Awaited<ReturnType<typeof import('@/lib/supabase/server').createClient>>,
+  supabase: SupabaseClient,
   baseSlug: string,
   psychologistId: string,
   maxTries = 5

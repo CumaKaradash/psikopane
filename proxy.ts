@@ -1,8 +1,8 @@
-// middleware.ts — Edge Runtime uyumlu
+// proxy.ts — Next.js 16 Edge Runtime (eski adı: middleware.ts)
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(

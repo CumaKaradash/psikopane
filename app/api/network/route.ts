@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 // app/api/network/route.ts
 
 import { createClient } from '@/lib/supabase/server'
@@ -15,7 +16,7 @@ function toSlug(text: string): string {
 
 // Benzersiz takım slug'ı (teams tablosunda unique)
 async function uniqueTeamSlug(
-  supabase: Awaited<ReturnType<typeof import('@/lib/supabase/server').createClient>>,
+  supabase: SupabaseClient,
   base: string,
   maxTries = 5
 ): Promise<string> {
