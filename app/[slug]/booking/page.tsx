@@ -121,7 +121,7 @@ export default async function BookingPage({ params }: Props) {
     .map(m => ({
       psychologist_id: m.psychologist_id,
       role:            m.role as 'owner' | 'member',
-      profile:         m.profile as PublicProfile,
+      profile:         m.profile as unknown as PublicProfile,
     }))
 
   const ctx: BookingContext = {
