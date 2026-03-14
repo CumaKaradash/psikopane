@@ -1,4 +1,4 @@
-// app/api/homework/responses/route.ts  — public endpoint, rate limited
+// app/api/homework/responses/route.ts — public endpoint, rate limited
 import { createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { checkRateLimit, homeworkResponseRateLimit, RATE_OPTS } from '@/lib/upstash-rate-limit'
@@ -11,17 +11,27 @@ export async function POST(req: Request) {
 
   const body = await req.json()
   const { homework_id, respondent_name, answers } = body
-  if (!homework_id || !answers)
+
+  if (!homework_id || !answers) {
     return NextResponse.json({ error: 'Eksik alan' }, { status: 400 })
+  }
 
   const supabase = await createServiceClient()
+
+  const insertData = {
+    homework_id:     homework_id,
+    respondent_name: respondent_name !== undefined ? respondent_name : null,
+    answers:         answers,
+  }
+
   const { data, error } = await supabase
     .from('homework_responses')
-    .insert({ homework_id, respondent_name: respondent_name ?? null, answers })
+    .insert(insertData)
     .select()
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
   const res = NextResponse.json(data, { status: 201 })
   Object.entries(rl.headers).forEach(([k, v]) => res.headers.set(k, v))
   return res

@@ -252,7 +252,7 @@ export default function NetworkClient({
               Meslektaş Ekle
             </h3>
             <p className="text-xs text-muted mb-4">
-              Psikopanel'de kayıtlı bir meslektaşınızın e-posta adresiyle bağlantı isteği gönderin.
+              Psikopanel kayıtlı meslektaşınızın e-posta adresiyle bağlantı isteği gönderin.
             </p>
             <form onSubmit={sendConnect} className="flex gap-3">
               <div className="relative flex-1">
@@ -527,7 +527,7 @@ export default function NetworkClient({
             </div>
             <div className="p-6 space-y-4">
               <p className="text-xs text-muted">
-                Psikopanel'de kayıtlı bir meslektaşınızın e-posta adresini girin.
+                Psikopanel kayıtlı meslektaşınızın e-posta adresini girin.
               </p>
               <div className="flex gap-3">
                 <div className="relative flex-1">

@@ -161,7 +161,7 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
         <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
         <button onClick={() => importRef.current?.click()}
           className="btn-outline flex items-center gap-1.5 text-xs">
-          <Upload size={14} /> JSON'dan İçe Aktar
+          <Upload size={14} /> JSON ile İçe Aktar
         </button>
         <button onClick={() => setAddOpen(true)} className="btn-primary">
           + Yeni Test

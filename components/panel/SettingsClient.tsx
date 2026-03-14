@@ -258,7 +258,7 @@ export default function SettingsClient({ profile: initial }: Props) {
         <div className="card p-6 space-y-5">
           <div>
             <label className="label flex items-center gap-1.5">
-              <Link2 size={12} /> Profil URL'i *
+              <Link2 size={12} /> Profil Adresi *
             </label>
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted whitespace-nowrap hidden sm:inline">
@@ -282,7 +282,7 @@ export default function SettingsClient({ profile: initial }: Props) {
             <input className="input" type="url" placeholder="https://…"
               value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)} />
             <p className="text-[11px] text-muted mt-1">
-              Fotoğraf URL'i girin. Supabase Storage veya harici bir CDN kullanabilirsiniz.
+              Fotoğraf bağlantısını girin. Supabase Storage veya harici bir CDN kullanabilirsiniz.
             </p>
             {avatarUrl && (
               <div className="mt-3 flex items-center gap-3">

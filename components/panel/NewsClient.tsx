@@ -246,7 +246,7 @@ export default function NewsClient({ articles }: Props) {
           <p className="text-sm font-semibold text-sage mb-1">Gerçek Zamanlı Entegrasyon</p>
           <p className="text-xs text-muted leading-relaxed">
             Bu sayfa statik verilerle çalışmaktadır. Gerçek bir RSS kaynağına veya
-            akademik dergi API'sine bağlamak için{' '}
+            akademik dergi API adresine bağlamak için{' '}
             <code className="bg-white px-1 py-0.5 rounded text-xs">app/panel/news/page.tsx</code>{' '}
             içindeki <code className="bg-white px-1 py-0.5 rounded text-xs">ARTICLES</code>{' '}
             dizisini dinamik bir <code className="bg-white px-1 py-0.5 rounded text-xs">fetch()</code>{' '}

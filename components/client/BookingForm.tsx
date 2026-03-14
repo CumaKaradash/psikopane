@@ -295,7 +295,7 @@ export default function BookingForm({ ctx, profile: legacyProfile }: Props) {
           {pushSupported && <> ve <strong>tarayıcı bildirimi</strong></>} olarak almayı kabul ediyorum.
           {pushSupported && notifyConsent && (
             <span className="block text-sage mt-0.5">
-              🔔 Gönder'e bastığınızda bildirim izni istenecek.
+              🔔 Gönder tuşuna basıldığında bildirim izni istenecek.
             </span>
           )}
         </span>
