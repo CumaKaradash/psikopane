@@ -4,25 +4,9 @@ import { cookies } from 'next/headers'
 
 export async function createClient() {
   const cookieStore = await cookies()
-  
-  // Check for required environment variables
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('Supabase environment variables are missing:', {
-      NEXT_PUBLIC_SUPABASE_URL: !!supabaseUrl,
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: !!supabaseAnonKey
-    })
-    throw new Error(
-      'Server configuration error: Missing Supabase environment variables. ' +
-      'Please check your .env.local file and ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set.'
-    )
-  }
-
   return createServerClient(
-    supabaseUrl,
-    supabaseAnonKey,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll()            { return cookieStore.getAll() },
@@ -40,25 +24,9 @@ export async function createClient() {
 
 export async function createServiceClient() {
   const cookieStore = await cookies()
-  
-  // Check for required environment variables
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    console.error('Supabase service client environment variables are missing:', {
-      NEXT_PUBLIC_SUPABASE_URL: !!supabaseUrl,
-      SUPABASE_SERVICE_ROLE_KEY: !!serviceRoleKey
-    })
-    throw new Error(
-      'Server configuration error: Missing Supabase service role environment variables. ' +
-      'Please check your .env.local file and ensure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.'
-    )
-  }
-
   return createServerClient(
-    supabaseUrl,
-    serviceRoleKey,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
       cookies: {
         getAll()            { return cookieStore.getAll() },

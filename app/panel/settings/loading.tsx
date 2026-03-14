@@ -1,2 +1,2 @@
-// app/panel/settings/loading.tsx
-export { default } from '@/app/panel/loading'
+// loading.tsx — panel skeleton yeniden dışa aktar
+export { default } from '../loading'

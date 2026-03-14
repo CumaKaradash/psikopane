@@ -4,16 +4,17 @@ import { notFound } from 'next/navigation'
 import HomeworkForm from '@/components/client/HomeworkForm'
 
 interface Props {
-  params: { slug: string; odevId: string }
+  params: Promise<{ slug: string; odevId: string }>
 }
 
-export default async function OdevPage({ params }: Props) {
+export default async function OdevPage({ params: rawParams }: Props) {
+  const { slug, odevId } = await rawParams
   const supabase = await createClient()
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('id, full_name, slug')
-    .eq('slug', params.slug)
+    .eq('slug', slug)
     .single()
 
   if (!profile) notFound()
@@ -22,7 +23,7 @@ export default async function OdevPage({ params }: Props) {
     .from('homework')
     .select('*')
     .eq('psychologist_id', profile.id)
-    .eq('slug', params.odevId)
+    .eq('slug', odevId)
     .eq('is_active', true)
     .single()
 

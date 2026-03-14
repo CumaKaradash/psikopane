@@ -53,7 +53,7 @@ export default function QuizApp({ testId, initialQuestions = [], onSave, onClose
     setCorrectAnswer('')
   }
 
-  function updateQuestion(index: number, field: keyof Question, value: any) {
+  function updateQuestion(index: number, field: keyof Question, value: Question[keyof Question]) {
     const updatedQuestions = [...questions]
     updatedQuestions[index] = { ...updatedQuestions[index], [field]: value }
     setQuestions(updatedQuestions)

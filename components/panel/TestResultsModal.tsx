@@ -3,52 +3,21 @@
 
 import { useState } from 'react'
 import { X, User, Calendar, MessageSquare, CheckCircle, Download } from 'lucide-react'
-import { Document, Page, Text, View, StyleSheet, pdf, Font } from '@react-pdf/renderer'
 
-// Register Turkish character supported font
-Font.register({
-  family: 'Roboto',
-  src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-light-webfont.ttf'
-})
+// @react-pdf/renderer — client only, dinamik import ile SSR bypass
+let pdfLib: typeof import('@react-pdf/renderer') | null = null
+async function getPdfLib() {
+  if (!pdfLib) {
+    pdfLib = await import('@react-pdf/renderer')
+    pdfLib.Font.register({
+      family: 'Roboto',
+      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-light-webfont.ttf',
+    })
+  }
+  return pdfLib
+}
 
-// PDF styles
-const styles = StyleSheet.create({
-  page: {
-    flexDirection: 'column',
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    fontFamily: 'Roboto',
-  },
-  title: {
-    fontSize: 18,
-    marginBottom: 15,
-    fontWeight: 'bold',
-    fontFamily: 'Roboto',
-  },
-  subtitle: {
-    fontSize: 12,
-    marginBottom: 8,
-    fontFamily: 'Roboto',
-  },
-  sectionTitle: {
-    fontSize: 14,
-    marginBottom: 12,
-    fontWeight: 'bold',
-    fontFamily: 'Roboto',
-  },
-  question: {
-    fontSize: 11,
-    marginBottom: 6,
-    fontWeight: 'bold',
-    fontFamily: 'Roboto',
-  },
-  answer: {
-    fontSize: 10,
-    marginBottom: 8,
-    marginLeft: 10,
-    fontFamily: 'Roboto',
-  },
-})
+// PDF styles — lazy loaded in generatePDF()
 
 interface TestResponse {
   id: string
@@ -94,31 +63,6 @@ const getAnswerText = (answer: any, question: TestQuestion) => {
   return 'Cevap bulunamadı'
 }
 
-// PDF Document Component
-const TestPDFDocument = ({ test, response }: { 
-  test: Props['test'], 
-  response: TestResponse
-}) => (
-  <Document>
-    <Page size="A4" style={styles.page}>
-      <Text style={styles.title}>{test.title}</Text>
-      <Text style={styles.subtitle}>Kullanıcı: {response.respondent_name || 'Misafir'}</Text>
-      <Text style={styles.subtitle}>Tarih: {new Date(response.completed_at).toLocaleDateString('tr-TR')}</Text>
-      
-      <Text style={styles.sectionTitle}>Sorular ve Cevaplar:</Text>
-      
-      {test.questions.map((question, index) => {
-        const answer = response.answers.find(a => a.question_index === index)
-        return (
-          <View key={index} style={{ marginBottom: 8 }}>
-            <Text style={styles.question}>{index + 1}. {question.text}</Text>
-            <Text style={styles.answer}>Cevap: {answer ? getAnswerText(answer, question) : 'Cevaplanmamış'}</Text>
-          </View>
-        )
-      })}
-    </Page>
-  </Document>
-)
 
 export default function TestResultsModal({ isOpen, onClose, test, responses, profileSlug }: Props) {
   const [selectedResponse, setSelectedResponse] = useState<TestResponse | null>(null)
@@ -127,10 +71,38 @@ export default function TestResultsModal({ isOpen, onClose, test, responses, pro
   const generatePDF = async () => {
     if (!selectedResponse) return
 
-    const blob = await pdf(<TestPDFDocument 
-      test={test} 
-      response={selectedResponse} 
-    />).toBlob()
+    const { pdf: pdfFn, Document: Doc, Page: Pg, Text: Txt, View: Vw, StyleSheet: SS } = await getPdfLib()
+
+    const styles = SS.create({
+      page: { flexDirection: 'column', backgroundColor: '#FFFFFF', padding: 20 },
+      title: { fontSize: 18, marginBottom: 15, fontWeight: 'bold' },
+      subtitle: { fontSize: 12, marginBottom: 8 },
+      sectionTitle: { fontSize: 14, marginBottom: 12, fontWeight: 'bold' },
+      question: { fontSize: 11, marginBottom: 6, fontWeight: 'bold' },
+      answer: { fontSize: 10, marginBottom: 8, marginLeft: 10 },
+    })
+
+    const PdfDoc = () => (
+      <Doc>
+        <Pg size="A4" style={styles.page}>
+          <Txt style={styles.title}>{test.title}</Txt>
+          <Txt style={styles.subtitle}>Kullanıcı: {selectedResponse.respondent_name || 'Misafir'}</Txt>
+          <Txt style={styles.subtitle}>Tarih: {new Date(selectedResponse.completed_at).toLocaleDateString('tr-TR')}</Txt>
+          <Txt style={styles.sectionTitle}>Sorular ve Cevaplar:</Txt>
+          {test.questions.map((question, index) => {
+            const answer = selectedResponse.answers.find((a: any) => a.question_index === index)
+            return (
+              <Vw key={index} style={{ marginBottom: 8 }}>
+                <Txt style={styles.question}>{index + 1}. {question.text}</Txt>
+                <Txt style={styles.answer}>Cevap: {answer ? getAnswerText(answer, question) : 'Cevaplanmamış'}</Txt>
+              </Vw>
+            )
+          })}
+        </Pg>
+      </Doc>
+    )
+
+    const blob = await pdfFn(<PdfDoc />).toBlob()
     
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')

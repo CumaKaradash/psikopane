@@ -63,9 +63,9 @@ export default async function NetworkPage() {
 
       <NetworkClient
         currentUserId={user.id}
-        sentConnections={(sentConns ?? []) as any}
-        receivedConnections={(receivedConns ?? []) as any}
-        teams={(teams ?? []) as any}
+        sentConnections={sentConns ?? []}
+        receivedConnections={receivedConns ?? []}
+        teams={teams ?? []}
       />
     </>
   )

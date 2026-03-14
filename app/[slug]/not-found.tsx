@@ -1,6 +1,8 @@
+'use client'
 // app/[slug]/not-found.tsx
 // [slug] segmenti altında notFound() çağrıldığında gösterilir
 
+'use client'
 import Link from 'next/link'
 import { SearchX, ArrowLeft, Home } from 'lucide-react'
 
@@ -30,9 +32,9 @@ export default function SlugNotFound() {
           </p>
           <ul className="space-y-2 text-sm text-charcoal">
             {[
-              "URL'i doğru yazdığınızdan emin olun.",
-              "Psikologun size verdiği bağlantıyı tekrar kontrol edin.",
-              "Psikolog profilini yeniden oluşturmuş veya URL'i değiştirmiş olabilir.",
+              'URL'i doğru yazdığınızdan emin olun.',
+              'Psikologun size verdiği bağlantıyı tekrar kontrol edin.',
+              'Psikolog profilini yeniden oluşturmuş veya URL'i değiştirmiş olabilir.',
             ].map((item, i) => (
               <li key={i} className="flex items-start gap-2">
                 <span className="text-sage font-bold mt-0.5 flex-shrink-0">·</span>

@@ -8,17 +8,18 @@ import BookingForm from '@/components/client/BookingForm'
 import type { PublicProfile, BookingContext } from '@/lib/types'
 
 interface Props {
-  params: { slug: string }
+  params: Promise<{ slug: string }>
 }
 
-export async function generateMetadata({ params }: Props): Promise<import('next').Metadata> {
+export async function generateMetadata({ params: rawParams }: Props): Promise<import('next').Metadata> {
+  const { slug: params } = await rawParams
   const supabase = await createClient()
   const appUrl   = process.env.NEXT_PUBLIC_APP_URL ?? 'https://psikopanel.tr'
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('full_name, title, bio, avatar_url')
-    .eq('slug', params.slug)
+    .eq('slug', params)
     .single()
 
   if (profile) {
@@ -42,7 +43,7 @@ export async function generateMetadata({ params }: Props): Promise<import('next'
   const { data: team } = await supabase
     .from('teams')
     .select('name, description, avatar_url')
-    .eq('slug', params.slug)
+    .eq('slug', params)
     .single()
 
   if (team) {
@@ -65,9 +66,9 @@ export async function generateMetadata({ params }: Props): Promise<import('next'
   return { title: 'Randevu Al | PsikoPanel' }
 }
 
-export default async function BookingPage({ params }: Props) {
+export default async function BookingPage({ params: rawParams }: Props) {
   const supabase = await createClient()
-  const { slug } = params
+  const { slug } = await rawParams
 
   // ── 1. Bireysel profil ────────────────────────────────────────────────────
   const { data: profile } = await supabase
@@ -121,7 +122,7 @@ export default async function BookingPage({ params }: Props) {
     .map(m => ({
       psychologist_id: m.psychologist_id,
       role:            m.role as 'owner' | 'member',
-      profile:         m.profile as unknown as PublicProfile,
+      profile:         m.profile as PublicProfile,
     }))
 
   const ctx: BookingContext = {

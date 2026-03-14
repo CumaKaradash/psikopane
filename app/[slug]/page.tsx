@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 
-interface Props { params: { slug: string } }
+interface Props { params: Promise<{ slug: string }> }
 
 // ── Veri çekici yardımcı (generateMetadata + page aynı supabase çağrısını tekrarlamamak için) ──
 async function resolveSlug(slug: string) {
@@ -36,9 +36,10 @@ async function resolveSlug(slug: string) {
 }
 
 // ── generateMetadata — Open Graph dahil ──────────────────────────────────────
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params: rawParams }: Props): Promise<Metadata> {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://psikopanel.tr'
-  const result = await resolveSlug(params.slug)
+  const { slug } = await rawParams
+  const result = await resolveSlug(slug)
 
   if (!result) {
     return {
@@ -112,8 +113,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 // ── Sayfa bileşeni ────────────────────────────────────────────────────────────
-export default async function PublicProfilePage({ params }: Props) {
-  const result = await resolveSlug(params.slug)
+export default async function PublicProfilePage({ params: rawParams }: Props) {
+  const { slug } = await rawParams
+  const result = await resolveSlug(slug)
   if (!result) notFound()
 
   if (result.type === 'individual') {

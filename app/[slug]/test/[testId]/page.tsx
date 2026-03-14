@@ -4,17 +4,18 @@ import { notFound } from 'next/navigation'
 import TestRunner from '@/components/client/TestRunner'
 
 interface Props {
-  params: { slug: string; testId: string }
+  params: Promise<{ slug: string; testId: string }>
 }
 
-export default async function TestPage({ params }: Props) {
+export default async function TestPage({ params: rawParams }: Props) {
+  const { slug, testId: testIdParam } = await rawParams
   const supabase = await createClient()
 
   // Psikolog slug'ını doğrula
   const { data: profile } = await supabase
     .from('profiles')
     .select('id, full_name, slug')
-    .eq('slug', params.slug)
+    .eq('slug', slug)
     .single()
 
   if (!profile) notFound()
@@ -24,7 +25,7 @@ export default async function TestPage({ params }: Props) {
     .from('tests')
     .select('*')
     .eq('psychologist_id', profile.id)
-    .eq('slug', params.testId)
+    .eq('slug', testIdParam)
     .eq('is_active', true)
     .single()
 

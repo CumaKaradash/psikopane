@@ -166,7 +166,5 @@ export async function GET(req: Request) {
       else    results.errors++
     }
   }
-
-  console.log('Cron reminders:', results)
   return NextResponse.json({ success: true, ...results })
 }

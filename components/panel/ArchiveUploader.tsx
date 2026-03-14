@@ -86,9 +86,9 @@ export default function ArchiveUploader({ userId }: Props) {
       toast.success(`${file.name} başarıyla yüklendi.`)
       return true
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Yükleme hatası:', error)
-      const errorMsg = error?.message || 'Bilinmeyen bir hata oluştu'
+      const errorMsg = (error instanceof Error ? error.message : null) || 'Bilinmeyen bir hata oluştu'
       setFilesState(prev => prev.map(f => f.id === fileId ? { ...f, status: 'error', errorMessage: errorMsg } : f))
       toast.error(`Hata: ${errorMsg}`)
       return false
