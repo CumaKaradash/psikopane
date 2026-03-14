@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   const supabase = await createServiceClient()
   const { data, error } = await supabase
     .from('test_responses')
-    .insert({ test_id, respondent_name: respondent_name ?? null, answers, total_score ?? null })
+    .insert({ test_id, respondent_name: respondent_name ?? null, answers, total_score: total_score ?? null })
     .select()
     .single()
 
