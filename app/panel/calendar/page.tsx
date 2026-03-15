@@ -83,7 +83,16 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     return (data ?? []).map((a: unknown) => {
       const appt = a as Record<string, unknown>
       return {
-        ...appt,
+        id: appt.id as string,
+        starts_at: appt.starts_at as string,
+        duration_min: appt.duration_min as number,
+        session_type: appt.session_type as string,
+        status: appt.status as string,
+        guest_name: appt.guest_name as string | null,
+        guest_phone: appt.guest_phone as string | null ?? undefined,
+        guest_email: appt.guest_email as string | null ?? undefined,
+        guest_note: appt.guest_note as string | null ?? undefined,
+        notes: appt.notes as string | null ?? undefined,
         client: Array.isArray(appt.client)
           ? (appt.client[0] as { full_name: string } | undefined) ?? null
           : (appt.client as { full_name: string } | null) ?? null,
