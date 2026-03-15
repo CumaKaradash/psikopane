@@ -61,14 +61,19 @@ export default async function NetworkPage() {
   ])
 
   // Supabase join'leri normalize et
-  function normalizeConnections(data: unknown[] | null, joinField: string) {
+  function normalizeConnections(data: unknown[] | null, joinField: 'addressee' | 'requester') {
     return (data ?? []).map((item: unknown) => {
-      const conn = item as Record<string, unknown>
+      const c = item as Record<string, unknown>
       return {
-        ...conn,
-        [joinField]: Array.isArray(conn[joinField]) 
-          ? conn[joinField][0] ?? null 
-          : conn[joinField] ?? null,
+        id: c.id as string,
+        requester_id: c.requester_id as string,
+        addressee_id: c.addressee_id as string,
+        status: c.status as 'pending' | 'accepted' | 'rejected',
+        created_at: c.created_at as string,
+        updated_at: (c.updated_at ?? c.created_at) as string,
+        [joinField]: Array.isArray(c[joinField])
+          ? (c[joinField] as unknown[])[0] ?? null
+          : c[joinField] ?? null,
       }
     })
   }
@@ -117,7 +122,13 @@ export default async function NetworkPage() {
     return (data ?? []).map((item: unknown) => {
       const inv = item as Record<string, unknown>
       return {
-        ...inv,
+        id: inv.id as string,
+        team_id: inv.team_id as string,
+        psychologist_id: inv.psychologist_id as string,
+        role: inv.role as 'owner' | 'member',
+        status: inv.status as 'pending' | 'accepted' | 'rejected',
+        created_at: inv.created_at as string,
+        joined_at: (inv.joined_at ?? inv.created_at) as string,
         profile: Array.isArray(inv.profile) 
           ? inv.profile[0] ?? null 
           : inv.profile ?? null,
