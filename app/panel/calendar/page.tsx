@@ -53,6 +53,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const nextMonth    = format(addMonths(viewDate, 1), 'yyyy-MM')
   const currentMonth = format(viewDate, 'MMMM yyyy', { locale: tr })
 
+  // Supabase join bazen dizi döndürür, normalize et
+  function normalizeAppts(data: any[] | null) {
+    return (data ?? []).map((a: any) => ({
+      ...a,
+      client: Array.isArray(a.client) ? (a.client[0] ?? null) : a.client,
+    }))
+  }
+
   return (
     <>
       <header className="bg-white border-b border-border px-4 md:px-8 py-4 sticky top-0 z-40 flex items-center justify-between">
@@ -72,9 +80,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       </header>
 
       <CalendarClient
-        appointments={appointments ?? []}
-        todayAppts={todayAppts ?? []}
-        pendingAppts={pendingAppts ?? []}
+        appointments={normalizeAppts(appointments)}
+        todayAppts={normalizeAppts(todayAppts)}
+        pendingAppts={normalizeAppts(pendingAppts)}
         viewDate={{ year, month }}
         today={todayStr}
       />
