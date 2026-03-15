@@ -5,6 +5,32 @@ import { startOfMonth, endOfMonth, format, addMonths, subMonths } from 'date-fns
 import { tr } from 'date-fns/locale'
 import CalendarClient from '@/components/panel/CalendarClient'
 
+interface NormalizedAppt {
+  id: string
+  starts_at: string
+  duration_min: number
+  session_type: string
+  status: string
+  guest_name: string | null
+  guest_phone?: string | null
+  guest_email?: string | null
+  guest_note?: string | null
+  notes?: string | null
+  client?: { full_name: string } | null
+}
+
+function normalizeAppts(data: unknown[] | null): NormalizedAppt[] {
+  return (data ?? []).map((a: unknown) => {
+    const appt = a as Record<string, unknown>
+    return {
+      ...appt,
+      client: Array.isArray(appt.client)
+        ? (appt.client[0] as { full_name: string } | undefined) ?? null
+        : (appt.client as { full_name: string } | null) ?? null,
+    } as NormalizedAppt
+  })
+}
+
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -53,13 +79,6 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const nextMonth    = format(addMonths(viewDate, 1), 'yyyy-MM')
   const currentMonth = format(viewDate, 'MMMM yyyy', { locale: tr })
 
-  // Supabase join bazen dizi döndürür, normalize et
-  function normalizeAppts(data: any[] | null) {
-    return (data ?? []).map((a: any) => ({
-      ...a,
-      client: Array.isArray(a.client) ? (a.client[0] ?? null) : a.client,
-    }))
-  }
 
   return (
     <>
@@ -80,9 +99,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       </header>
 
       <CalendarClient
-        appointments={normalizeAppts(appointments)}
-        todayAppts={normalizeAppts(todayAppts)}
-        pendingAppts={normalizeAppts(pendingAppts)}
+        appointments={normalizeAppts(appointments as unknown[])}
+        todayAppts={normalizeAppts(todayAppts as unknown[])}
+        pendingAppts={normalizeAppts(pendingAppts as unknown[])}
         viewDate={{ year, month }}
         today={todayStr}
       />

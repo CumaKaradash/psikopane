@@ -41,8 +41,9 @@ interface TestWithResponses {
 export default async function TestResponsesPage({
   params,
 }: {
-  params: { testId: string }
+  params: Promise<{ testId: string }>
 }) {
+  const { testId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -55,7 +56,7 @@ export default async function TestResponsesPage({
         id, respondent_name, answers, total_score, completed_at
       )
     `)
-    .eq('id', params.testId)
+    .eq('id', testId)
     .eq('psychologist_id', user.id)
     .single()
 

@@ -29,8 +29,9 @@ interface HomeworkWithResponses {
 export default async function HomeworkResponsesPage({
   params,
 }: {
-  params: { hwId: string }
+  params: Promise<{ hwId: string }>
 }) {
+  const { hwId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -43,7 +44,7 @@ export default async function HomeworkResponsesPage({
         id, respondent_name, answers, completed_at
       )
     `)
-    .eq('id', params.hwId)
+    .eq('id', hwId)
     .eq('psychologist_id', user.id)
     .single()
 
