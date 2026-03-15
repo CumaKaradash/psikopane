@@ -7,12 +7,6 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import webpush from 'web-push'
 
-// ── Servis kurulumu ──────────────────────────────────────────────────────────
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
 // Web Push VAPID yapılandırması
 const vapidConfigured =
   process.env.VAPID_PRIVATE_KEY &&
@@ -103,6 +97,11 @@ async function sendPushNotification(opts: {
 
 // ── GET handler — Vercel Cron bu endpoint'i çağırır ─────────────────────────
 export async function GET(req: Request) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
   // Güvenlik: Vercel Cron secret header
   const authHeader = req.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
@@ -134,9 +133,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // Supabase join bazen dizi döndürür, normalize et
+  const normalizedAppointments = (appointments ?? []).map((appt: any) => ({
+    ...appt,
+    psychologist: Array.isArray(appt.psychologist) 
+      ? appt.psychologist[0] ?? null 
+      : appt.psychologist ?? null,
+  }))
+
   const results = { total: 0, emailSent: 0, pushSent: 0, errors: 0 }
 
-  for (const appt of appointments ?? []) {
+  for (const appt of normalizedAppointments) {
     results.total++
     const psychName = (appt.psychologist as any)?.full_name ?? 'Psikologunuz'
 

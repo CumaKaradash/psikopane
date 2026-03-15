@@ -26,6 +26,25 @@ export default async function CommunityPage() {
     .eq('psychologist_id', user.id)
     .eq('is_public', true)
 
+  // Supabase join bazen dizi döndürür, normalize et
+  function normalizePublicTests(data: unknown[] | null) {
+    return (data ?? []).map((item: unknown) => {
+      const test = item as Record<string, unknown>
+      return {
+        id: test.id as string,
+        title: test.title as string,
+        description: test.description as string | null,
+        questions: test.questions as { text: string; options?: { label: string; score: number; }[] | undefined }[],
+        slug: test.slug as string,
+        psychologist_id: test.psychologist_id as string,
+        created_at: test.created_at as string,
+        is_active: test.is_active as boolean,
+        is_public: test.is_public as boolean,
+        author: Array.isArray(test.author) ? test.author[0] ?? null : test.author ?? null,
+      }
+    })
+  }
+
   return (
     <>
       <header className="bg-white border-b border-border px-4 md:px-8 py-4 sticky top-0 z-40">
@@ -52,7 +71,7 @@ export default async function CommunityPage() {
       </header>
 
       <CommunityClient
-        publicTests={publicTests ?? []}
+        publicTests={normalizePublicTests(publicTests as unknown[])}
         myPublicCount={myPublicCount ?? 0}
         currentUserId={user.id}
       />

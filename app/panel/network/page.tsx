@@ -60,18 +60,83 @@ export default async function NetworkPage() {
       .order('created_at', { ascending: false }),
   ])
 
+  // Supabase join'leri normalize et
+  function normalizeConnections(data: unknown[] | null, joinField: string) {
+    return (data ?? []).map((item: unknown) => {
+      const conn = item as Record<string, unknown>
+      return {
+        ...conn,
+        [joinField]: Array.isArray(conn[joinField]) 
+          ? conn[joinField][0] ?? null 
+          : conn[joinField] ?? null,
+      }
+    })
+  }
+
+  function normalizeTeams(data: unknown[] | null) {
+    return (data ?? []).map((team: unknown) => {
+      const t = team as Record<string, unknown>
+      return {
+        ...t,
+        members: t.members ? (t.members as unknown[]).map((member: unknown) => {
+          const m = member as Record<string, unknown>
+          return {
+            ...m,
+            profile: Array.isArray(m.profile) 
+              ? m.profile[0] ?? null 
+              : m.profile ?? null,
+          }
+        }) : null,
+      }
+    })
+  }
+
+  function normalizeMemberTeams(data: unknown[] | null) {
+    return (data ?? []).map((item: unknown) => {
+      const tm = item as Record<string, unknown>
+      const team = tm.team as Record<string, unknown>
+      return {
+        ...tm,
+        team: {
+          ...team,
+          members: team.members ? (team.members as unknown[]).map((member: unknown) => {
+            const m = member as Record<string, unknown>
+            return {
+              ...m,
+              profile: Array.isArray(m.profile) 
+                ? m.profile[0] ?? null 
+                : m.profile ?? null,
+            }
+          }) : null,
+        }
+      }
+    })
+  }
+
+  function normalizeInvitations(data: unknown[] | null) {
+    return (data ?? []).map((item: unknown) => {
+      const inv = item as Record<string, unknown>
+      return {
+        ...inv,
+        profile: Array.isArray(inv.profile) 
+          ? inv.profile[0] ?? null 
+          : inv.profile ?? null,
+      }
+    })
+  }
+
   // Tekrar eden takımları birleştir (sahip + üye olunan)
-  const memberTeamList = (memberTeams ?? [])
+  const memberTeamList = (normalizeMemberTeams(memberTeams as unknown[]))
     .map((m: { team: unknown }) => m.team)
     .filter(Boolean) as typeof ownedTeams
   const teamIds = new Set((ownedTeams ?? []).map((t: { id: string }) => t.id))
   const extraTeams = (memberTeamList ?? []).filter((t: { id: string }) => !teamIds.has(t.id))
-  const teams = [...(ownedTeams ?? []), ...extraTeams]
+  const teams = [...(normalizeTeams(ownedTeams as unknown[])), ...extraTeams]
 
   // Bağlı meslektaşların paylaştığı test sayıları (istatistik)
   const acceptedIds = [
-    ...(sentConns ?? []).filter(c => c.status === 'accepted').map(c => c.addressee_id),
-    ...(receivedConns ?? []).filter(c => c.status === 'accepted').map(c => c.requester_id),
+    ...(normalizeConnections(sentConns as unknown[], 'addressee') ?? []).filter((c: any) => c.status === 'accepted').map(c => c.addressee_id),
+    ...(normalizeConnections(receivedConns as unknown[], 'requester') ?? []).filter((c: any) => c.status === 'accepted').map(c => c.requester_id),
   ]
 
   return (
@@ -95,10 +160,10 @@ export default async function NetworkPage() {
 
       <NetworkClient
         currentUserId={user.id}
-        sentConnections={sentConns ?? []}
-        receivedConnections={receivedConns ?? []}
+        sentConnections={normalizeConnections(sentConns as unknown[], 'addressee')}
+        receivedConnections={normalizeConnections(receivedConns as unknown[], 'requester')}
         teams={teams ?? []}
-        teamInvitations={teamInvitations ?? []}
+        teamInvitations={normalizeInvitations(teamInvitations as unknown[])}
       />
     </>
   )
