@@ -3,17 +3,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id: testId } = await params
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
 
     // Test responses'ı getir
     const { data: responses, error } = await supabase
@@ -28,8 +27,7 @@ export async function GET(
     }
 
     return NextResponse.json(responses || [])
-  } catch (error) {
-    console.error('API hatası:', error)
+  } catch {
     return NextResponse.json({ error: 'Sunucu hatası' }, { status: 500 })
   }
 }

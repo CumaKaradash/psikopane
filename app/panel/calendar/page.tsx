@@ -79,6 +79,17 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const nextMonth    = format(addMonths(viewDate, 1), 'yyyy-MM')
   const currentMonth = format(viewDate, 'MMMM yyyy', { locale: tr })
 
+  function normalizeAppts(data: unknown[] | null) {
+    return (data ?? []).map((a: unknown) => {
+      const appt = a as Record<string, unknown>
+      return {
+        ...appt,
+        client: Array.isArray(appt.client)
+          ? (appt.client[0] as { full_name: string } | undefined) ?? null
+          : (appt.client as { full_name: string } | null) ?? null,
+      }
+    })
+  }
 
   return (
     <>
