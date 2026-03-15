@@ -32,10 +32,12 @@ async function getPushSubscription(reg: ServiceWorkerRegistration) {
   } catch { return null }
 }
 
-function urlBase64ToUint8Array(b64: string): Uint8Array {
+function urlBase64ToUint8Array(b64: string): ArrayBuffer {
   const pad  = '='.repeat((4 - (b64.length % 4)) % 4)
   const raw  = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'))
-  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
+  const arr  = new Uint8Array(raw.length)
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i)
+  return arr.buffer as ArrayBuffer
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
