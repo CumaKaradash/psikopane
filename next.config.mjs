@@ -13,9 +13,16 @@ const nextConfig = {
   // web-push Node.js modülü Edge Runtime'a giremez
   serverExternalPackages: ['web-push'],
 
-  // TypeScript hataları — strict build
+  // TypeScript optimizasyonları
   typescript: {
     ignoreBuildErrors: false,
+    tsconfigPath: './tsconfig.json',
+  },
+
+  // ESLint optimizasyonları
+  eslint: {
+    ignoreDuringBuilds: false,
+    dirs: ['app', 'components', 'lib'], // Sadece ana dizinleri tara
   },
 
   // Güvenlik başlıkları

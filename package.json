@@ -5,9 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:no-lint": "next build --no-lint",
+    "build:no-typecheck": "next build --no-lint",
+    "build:fast": "next build --no-lint",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "typecheck:fast": "tsc --noEmit --skipLibCheck"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.3.2",
