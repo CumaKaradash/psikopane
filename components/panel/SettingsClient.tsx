@@ -1,7 +1,7 @@
 'use client'
 // components/panel/SettingsClient.tsx
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import {
   User, Link2, FileText, DollarSign,
@@ -96,7 +96,8 @@ export default function SettingsClient({ profile: initial }: Props) {
     }
   }
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://psikopanel.tr'
+  const [origin, setOrigin] = useState('')
+  useEffect(() => { setOrigin(window.location.origin) }, [])
   const publicUrl = `${origin}/${slug}`
 
   const TABS: { key: Tab; label: string; icon: typeof User }[] = [
@@ -121,7 +122,7 @@ export default function SettingsClient({ profile: initial }: Props) {
           <p className="text-sm text-muted truncate">{title || 'Unvan'}</p>
           <a href={publicUrl} target="_blank" rel="noopener noreferrer"
             className="text-xs text-sage hover:underline flex items-center gap-1 mt-0.5 truncate">
-            <Eye size={11} /> {origin}/{slug || '…'}
+            <Eye size={11} /> {origin ? `${origin}/${slug || '…'}` : slug || '…'}
           </a>
         </div>
         <a href={`/${slug}`} target="_blank" rel="noopener noreferrer"
@@ -180,12 +181,17 @@ export default function SettingsClient({ profile: initial }: Props) {
             <label className="label flex items-center gap-1.5">
               <FileText size={12} /> Hakkımda / Biyografi
             </label>
-            <textarea className="input min-h-[120px] resize-y" rows={4}
-              placeholder="Uzmanlık alanlarınız, terapi yaklaşımınız, çalıştığınız konular…"
+            <textarea className="input min-h-[160px] resize-y" rows={6}
+              placeholder="Uzmanlık alanlarınız, terapi yaklaşımınız, çalıştığınız konular, deneyiminiz…&#10;&#10;Örnek: 10 yıllık klinik deneyimimle bireysel terapi, anksiyete ve depresyon tedavisinde uzmanlaştım. Bilişsel Davranışçı Terapi ve EMDR yöntemlerini kullanıyorum."
               value={bio} onChange={e => setBio(e.target.value)} />
-            <p className="text-[11px] text-muted mt-1">
-              Bu metin randevu sayfanızda danışanlarınıza gösterilir.
-            </p>
+            <div className="flex items-center justify-between mt-1.5">
+              <p className="text-[11px] text-muted">
+                Bu metin profil sayfanızda (<span className="font-mono text-sage">{origin ? `${origin}/${slug}` : `/${slug}`}</span>) danışanlarınıza gösterilir.
+              </p>
+              <span className={`text-[10px] font-medium ${bio.length > 500 ? 'text-orange-500' : 'text-muted'}`}>
+                {bio.length} / 800
+              </span>
+            </div>
           </div>
         </div>
       )}

@@ -1,8 +1,7 @@
 'use client'
 // app/[slug]/not-found.tsx
 
-import Link from 'next/link'
-import { SearchX, ArrowLeft, Home } from 'lucide-react'
+import { SearchX } from 'lucide-react'
 
 const SUGGESTIONS = [
   'Profil adresini dogru yazdiginizdan emin olun.',
@@ -41,22 +40,6 @@ export default function SlugNotFound() {
           </ul>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <Link
-            href="/"
-            className="btn-primary flex-1 justify-center py-3 flex items-center gap-2"
-          >
-            <Home size={15} />
-            Ana Sayfaya Don
-          </Link>
-          <button
-            onClick={() => history.back()}
-            className="btn-outline flex-1 justify-center py-3 flex items-center gap-2"
-          >
-            <ArrowLeft size={15} />
-            Geri Git
-          </button>
-        </div>
 
         <p className="text-xs text-muted mt-6 opacity-50">Powered by PsikoPanel</p>
       </div>

@@ -1,10 +1,11 @@
 'use client'
-// components/panel/TestsClient.tsx — JSON export/import + is_public toggle
+// components/panel/TestsClient.tsx — JSON export/import + is_public toggle + QuizApp
 
 import { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { Download, Upload, Globe, Lock } from 'lucide-react'
 import type { Test } from '@/lib/types'
+import QuizApp from '@/components/panel/QuizApp'
 
 type TestWithCount = Test & {
   responses?: { count: number }[]
@@ -28,6 +29,7 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
   const [addOpen, setAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [form, setForm]       = useState({ title: '', slug: '', description: '', is_public: false })
+  const [quizTestId, setQuizTestId] = useState<string | null>(null)
   const importRef             = useRef<HTMLInputElement>(null)
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
@@ -145,7 +147,9 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
       setTests(t => [newTest, ...t])
       setAddOpen(false)
       setForm({ title: '', slug: '', description: '', is_public: false })
-      toast.success('Test oluşturuldu!')
+      toast.success('Test oluşturuldu! Şimdi soru ekleyebilirsiniz.')
+      // QuizApp'i otomatik aç
+      setQuizTestId(newTest.id)
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Hata oluştu')
     } finally {
@@ -203,6 +207,10 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
                   className="btn-outline py-1 px-2 text-xs flex items-center gap-1" title="JSON Dışa Aktar">
                   <Download size={11} />
                 </button>
+                <a href={`/panel/tests/responses/${t.id}`}
+                  className="btn-primary py-1 px-2.5 text-xs flex items-center gap-1">
+                  👁 Yanıtları Gör {count > 0 && <span className="bg-white/20 rounded-full px-1.5 py-0.5 text-[10px] font-bold">{count}</span>}
+                </a>
                 <button onClick={() => toggleActive(t.id, t.is_active)}
                   className="btn-outline py-1 px-2 text-xs">
                   {t.is_active ? 'Pasifleştir' : 'Aktifleştir'}
@@ -263,15 +271,81 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
                   onChange={e => setForm(f => ({ ...f, is_public: e.target.checked }))} />
                 <span className="text-xs text-charcoal">Topluluk havuzunda herkese açık yap</span>
               </label>
-              <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setAddOpen(false)} className="btn-outline flex-1 justify-center">İptal</button>
-                <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center disabled:opacity-60">
-                  {loading ? 'Oluşturuluyor…' : 'Oluştur'}
-                </button>
+              {/* İki buton: sadece oluştur (JSON ile doldurulacak) ya da manuel soru oluşturucu */}
+              <div className="border-t border-border pt-4 space-y-2">
+                <p className="text-xs text-muted font-medium">Soruları nasıl eklemek istersiniz?</p>
+                <div className="flex gap-3">
+                  <button type="submit" disabled={loading}
+                    className="btn-outline flex-1 justify-center text-xs disabled:opacity-60">
+                    {loading ? 'Oluşturuluyor…' : '📋 Boş Oluştur'}
+                  </button>
+                  <button type="button" disabled={loading}
+                    onClick={async () => {
+                      if (!form.title || !form.slug) { toast.error('Başlık ve URL zorunlu'); return }
+                      setLoading(true)
+                      try {
+                        const res = await fetch('/api/tests', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ title: form.title, slug: form.slug, description: form.description, questions: [], is_public: form.is_public }),
+                        })
+                        if (!res.ok) throw new Error((await res.json()).error)
+                        const newTest: TestWithCount = await res.json()
+                        setTests(t => [newTest, ...t])
+                        setAddOpen(false)
+                        setForm({ title: '', slug: '', description: '', is_public: false })
+                        setQuizTestId(newTest.id)
+                        toast.success('Test oluşturuldu! Sorular ekleniyor…')
+                      } catch (err: unknown) {
+                        toast.error(err instanceof Error ? err.message : 'Hata oluştu')
+                      } finally { setLoading(false) }
+                    }}
+                    className="btn-primary flex-1 justify-center text-xs disabled:opacity-60">
+                    ✏️ Manuel Oluştur
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted">
+                  <strong>Boş Oluştur:</strong> JSON import veya sonradan düzenle. <strong>Manuel:</strong> Adım adım soru ekle.
+                </p>
               </div>
+              <button type="button" onClick={() => setAddOpen(false)} className="btn-outline w-full justify-center text-sm">İptal</button>
             </form>
           </div>
         </div>
+      )}
+
+      {/* QuizApp — test oluşturulunca otomatik açılır */}
+      {quizTestId && (
+        <QuizApp
+          testId={quizTestId}
+          initialQuestions={[]}
+          onSave={async (questions) => {
+            // QuizApp zaten { label, score } formatında options üretiyor — doğrudan kullan
+            type QAQuestion = { text: string; type: string; options: { label: string; score: number }[] }
+            const formatted = (questions as QAQuestion[]).map((q) => ({
+              text: q.text,
+              options: q.options && q.options.length > 0
+                ? q.options.map((o) => ({ label: o.label, score: Number(o.score ?? 0) }))
+                : [],
+            }))
+            try {
+              const res = await fetch('/api/tests', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: quizTestId, questions: formatted }),
+              })
+              if (!res.ok) throw new Error((await res.json()).error)
+              setTests(ts => ts.map(t =>
+                t.id === quizTestId ? { ...t, questions: formatted } : t
+              ))
+              toast.success('Sorular kaydedildi! ✓')
+            } catch (err: unknown) {
+              toast.error(err instanceof Error ? err.message : 'Kayıt başarısız')
+            }
+            setQuizTestId(null)
+          }}
+          onClose={() => setQuizTestId(null)}
+        />
       )}
     </div>
   )

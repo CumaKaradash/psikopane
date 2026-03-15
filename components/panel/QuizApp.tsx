@@ -1,15 +1,20 @@
 'use client'
-// components/panel/QuizApp.tsx
+// components/panel/QuizApp.tsx — Düzeltildi: yeni soru formu ayrıldı, skor alanları eklendi
 
 import { useState } from 'react'
 import toast from 'react-hot-toast'
+import { Trash2, Plus, ChevronLeft, ChevronRight } from 'lucide-react'
+
+interface Option {
+  label: string
+  score: number
+}
 
 interface Question {
   id: string
   text: string
   type: 'multiple_choice' | 'text' | 'scale' | 'true_false'
-  options?: { label: string }[]
-  correct_answer?: string | number
+  options: Option[]
 }
 
 interface Props {
@@ -19,268 +24,308 @@ interface Props {
   onClose: () => void
 }
 
-export default function QuizApp({ testId, initialQuestions = [], onSave, onClose }: Props) {
-  const [questions, setQuestions] = useState<Question[]>(initialQuestions)
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
-  const [questionText, setQuestionText] = useState('')
-  const [questionType, setQuestionType] = useState<'multiple_choice' | 'text' | 'scale' | 'true_false'>('multiple_choice')
-  const [options, setOptions] = useState<{ label: string }[]>([{ label: '' }])
-  const [correctAnswer, setCorrectAnswer] = useState<string | number>('')
+type QType = Question['type']
 
-  const questionTypes = [
-    { value: 'multiple_choice', label: 'Çoktan Seçmeli', description: 'Doğru cevap seçenebilir' },
-    { value: 'text', label: 'Metin', description: 'Metin cevabı yazabilir' },
-    { value: 'scale', label: 'Ölçekli', description: '0-10 arası puan' },
-    { value: 'true_false', label: 'Doğru/Yanlış', description: 'Doğru veya yanlış seçenebilir' }
-  ]
+const TYPE_LABELS: Record<QType, string> = {
+  multiple_choice: 'Çoktan Seçmeli',
+  text:            'Açık Uçlu Metin',
+  scale:           'Ölçekli (0–10)',
+  true_false:      'Doğru / Yanlış',
+}
 
-  function addQuestion() {
-    const newQuestion: Question = {
-      id: Date.now().toString(),
-      text: questionText,
-      type: questionType,
-      options: questionType === 'multiple_choice' ? options : [],
-      correct_answer: questionType === 'scale' ? 5 : questionType === 'true_false' ? 'true' : ''
-    }
-    
-    setQuestions([...questions, newQuestion])
-    setCurrentQuestionIndex(questions.length)
-    
-    // Reset form
-    setQuestionText('')
-    setQuestionType('multiple_choice')
-    setOptions([{ label: '' }])
-    setCorrectAnswer('')
+function defaultOptions(type: QType): Option[] {
+  if (type === 'true_false') return [{ label: 'Doğru', score: 1 }, { label: 'Yanlış', score: 0 }]
+  if (type === 'scale') return Array.from({ length: 11 }, (_, i) => ({ label: String(i), score: i }))
+  if (type === 'multiple_choice') return [{ label: '', score: 1 }, { label: '', score: 0 }]
+  return []
+}
+
+const emptyNewQ = (): { text: string; type: QType; options: Option[] } => ({
+  text: '', type: 'multiple_choice', options: defaultOptions('multiple_choice'),
+})
+
+export default function QuizApp({ initialQuestions = [], onSave, onClose }: Props) {
+  const [questions, setQuestions] = useState<Question[]>(
+    initialQuestions.map(q => ({ ...q, options: (q.options ?? []) as Option[] }))
+  )
+  const [editIndex, setEditIndex] = useState<number | null>(null)
+  const [newQ,      setNewQ]      = useState(emptyNewQ())
+  const [adding,    setAdding]    = useState(false)
+
+  function updateEdit(field: keyof Question, value: Question[keyof Question]) {
+    if (editIndex === null) return
+    setQuestions(qs => qs.map((q, i) => i === editIndex ? { ...q, [field]: value } : q))
   }
 
-  function updateQuestion(index: number, field: keyof Question, value: Question[keyof Question]) {
-    const updatedQuestions = [...questions]
-    updatedQuestions[index] = { ...updatedQuestions[index], [field]: value }
-    setQuestions(updatedQuestions)
+  function updateEditOption(oi: number, field: keyof Option, value: string | number) {
+    if (editIndex === null) return
+    const opts = [...(questions[editIndex].options ?? [])]
+    opts[oi] = { ...opts[oi], [field]: field === 'score' ? Number(value) : value }
+    updateEdit('options', opts)
   }
 
-  function deleteQuestion(index: number) {
-    setQuestions(questions.filter((_, i) => i !== index))
-    if (currentQuestionIndex >= questions.length - 1) {
-      setCurrentQuestionIndex(Math.max(0, questions.length - 2))
-    }
+  function changeEditType(type: QType) {
+    if (editIndex === null) return
+    setQuestions(qs => qs.map((q, i) =>
+      i === editIndex ? { ...q, type, options: defaultOptions(type) } : q
+    ))
+  }
+
+  function deleteQuestion(i: number) {
+    setQuestions(qs => qs.filter((_, idx) => idx !== i))
+    if (editIndex === i) setEditIndex(null)
+    else if (editIndex !== null && editIndex > i) setEditIndex(editIndex - 1)
+  }
+
+  function handleAddQuestion() {
+    if (!newQ.text.trim()) { toast.error('Soru metni boş olamaz'); return }
+    const q: Question = { id: Date.now().toString(), ...newQ }
+    const next = questions.length
+    setQuestions(qs => [...qs, q])
+    setEditIndex(next)
+    setNewQ(emptyNewQ())
+    setAdding(false)
+  }
+
+  function changeNewType(type: QType) {
+    setNewQ(n => ({ ...n, type, options: defaultOptions(type) }))
+  }
+
+  function updateNewOption(oi: number, field: keyof Option, value: string | number) {
+    const opts = [...newQ.options]
+    opts[oi] = { ...opts[oi], [field]: field === 'score' ? Number(value) : value }
+    setNewQ(n => ({ ...n, options: opts }))
   }
 
   function saveQuestions() {
-    if (questions.length === 0) {
-      toast.error('En az bir soru ekleyin')
-      return
-    }
-    
+    if (questions.length === 0) { toast.error('En az bir soru ekleyin'); return }
+    const empty = questions.findIndex(q => !q.text.trim())
+    if (empty !== -1) { toast.error(`${empty + 1}. sorunun metni boş`); return }
     onSave(questions)
     onClose()
-    toast.success('Sorular kaydedi!')
+    toast.success('Sorular kaydedildi!')
   }
 
-  const currentQuestion = questions[currentQuestionIndex] || null
+  const editQ = editIndex !== null ? questions[editIndex] : null
 
   return (
     <div className="fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-          <h3 className="font-semibold">Quiz App - Soru Oluşturucu</h3>
-          <button onClick={onClose} className="text-muted text-xl leading-none hover:text-charcoal">×</button>
+      <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[92vh] flex flex-col shadow-xl">
+
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between flex-shrink-0">
+          <div>
+            <h3 className="font-semibold">Soru Oluşturucu</h3>
+            <p className="text-xs text-muted mt-0.5">{questions.length} soru eklendi</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={saveQuestions} disabled={questions.length === 0}
+              className="btn-primary disabled:opacity-60 text-sm py-2 px-4">
+              Kaydet ({questions.length})
+            </button>
+            <button onClick={onClose} className="text-muted text-2xl leading-none hover:text-charcoal">×</button>
+          </div>
         </div>
 
-        {/* Question Counter */}
-        <div className="px-6 py-3 border-b border-border">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted">Soru {currentQuestionIndex + 1} / {questions.length}</span>
-            <span className="text-sm text-muted">Toplam {questions.length} soru</span>
-          </div>
-        </div>
+        <div className="flex flex-1 min-h-0 overflow-hidden">
 
-        {/* Question Form */}
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="label">Soru Metni *</label>
-            <textarea 
-              className="input w-full h-20 resize-none"
-              placeholder="Örn: Hangi durakta bu soruyu tanımlarsınız?"
-              value={currentQuestion?.text || ''}
-              onChange={(e) => updateQuestion(currentQuestionIndex, 'text', e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="label">Soru Türü *</label>
-            <select 
-              className="input"
-              value={currentQuestion?.type || 'multiple_choice'}
-              onChange={(e) => updateQuestion(currentQuestionIndex, 'type', e.target.value)}
-            >
-              {questionTypes.map(type => (
-                <option key={type.value} value={type.value}>
-                  {type.label} - {type.description}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Multiple Choice Options */}
-          {currentQuestion?.type === 'multiple_choice' && (
-            <div className="space-y-2">
-              {(currentQuestion.options || [{ label: '' }]).map((option, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    className="input flex-1"
-                    placeholder={`Seçenek ${index + 1}`}
-                    value={option.label}
-                    onChange={(e) => {
-                      const newOptions = [...(currentQuestion.options || [])]
-                      newOptions[index] = { label: e.target.value }
-                      updateQuestion(currentQuestionIndex, 'options', newOptions)
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newOptions = (currentQuestion.options || []).filter((_, i) => i !== index)
-                      updateQuestion(currentQuestionIndex, 'options', newOptions)
-                    }}
-                    className="btn-outline btn-sm text-red-600 border-red-200 hover:bg-red-50"
-                  >
-                    Sil
+          {/* Soru listesi */}
+          <div className="w-56 flex-shrink-0 border-r border-border flex flex-col bg-cream/40 overflow-y-auto">
+            <div className="p-3 space-y-1">
+              {questions.map((q, i) => (
+                <div key={q.id}
+                  onClick={() => { setEditIndex(i); setAdding(false) }}
+                  className={`flex items-start gap-2 p-2.5 rounded-lg cursor-pointer group transition-colors
+                    ${editIndex === i && !adding ? 'bg-white border border-sage-l shadow-sm' : 'hover:bg-white/60'}`}>
+                  <span className="text-[10px] font-bold text-sage mt-0.5 flex-shrink-0 w-4 text-right">{i + 1}.</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate text-charcoal">
+                      {q.text || <span className="italic text-muted">Boş soru</span>}
+                    </p>
+                    <p className="text-[10px] text-muted mt-0.5">{TYPE_LABELS[q.type]}</p>
+                  </div>
+                  <button onClick={e => { e.stopPropagation(); deleteQuestion(i) }}
+                    className="opacity-0 group-hover:opacity-100 text-muted hover:text-red-500 flex-shrink-0 transition-opacity">
+                    <Trash2 size={12} />
                   </button>
                 </div>
               ))}
-              <button 
-                onClick={() => updateQuestion(currentQuestionIndex, 'options', [...(currentQuestion.options || []), { label: '' }])}
-                className="btn-outline btn-sm"
-              >
-                + Seçenek Ekle
+            </div>
+            <div className="p-3 mt-auto border-t border-border">
+              <button onClick={() => { setAdding(true); setEditIndex(null) }}
+                className="btn-primary w-full text-xs py-2 flex items-center justify-center gap-1">
+                <Plus size={13} /> Yeni Soru
               </button>
             </div>
-          )}
-
-          {/* Scale Options */}
-          {currentQuestion?.type === 'scale' && (
-            <div>
-              <label className="label">Puanlama (0-10)</label>
-              <input 
-                type="number"
-                className="input w-20"
-                min="0"
-                max="10"
-                placeholder="5"
-                value={typeof currentQuestion.correct_answer === 'number' ? currentQuestion.correct_answer : ''}
-                onChange={(e) => updateQuestion(currentQuestionIndex, 'correct_answer', parseInt(e.target.value))}
-              />
-            </div>
-          )}
-
-          {/* True/False Options */}
-          {currentQuestion?.type === 'true_false' && (
-            <div>
-              <label className="label">Doğru Yanlışı</label>
-              <select 
-                className="input"
-                value={typeof currentQuestion.correct_answer === 'string' ? currentQuestion.correct_answer : ''}
-                onChange={(e) => updateQuestion(currentQuestionIndex, 'correct_answer', e.target.value)}
-              >
-                <option value="">Seçiniz</option>
-                <option value="true">Doğru</option>
-                <option value="false">Yanlış</option>
-              </select>
-            </div>
-          )}
-
-          {/* Navigation Buttons */}
-          <div className="flex items-center justify-between gap-3 pt-4">
-            <button 
-              onClick={() => setCurrentQuestionIndex(Math.max(0, currentQuestionIndex - 1))}
-              disabled={currentQuestionIndex === 0}
-              className="btn-outline btn-sm"
-            >
-              ← Önceki
-            </button>
-            <button 
-              onClick={() => setCurrentQuestionIndex(Math.min(questions.length - 1, currentQuestionIndex + 1))}
-              disabled={currentQuestionIndex === questions.length - 1}
-              className="btn-outline btn-sm"
-            >
-              Sonraki →
-            </button>
           </div>
 
-          <div className="flex gap-3 pt-4">
-            <button 
-              onClick={addQuestion}
-              className="btn-primary"
-            >
-              + Soru Ekle
-            </button>
-            <button 
-              onClick={saveQuestions}
-              disabled={questions.length === 0}
-              className="btn-outline"
-            >
-              Kaydet
-            </button>
-          </div>
-        </div>
+          {/* Form alanı */}
+          <div className="flex-1 overflow-y-auto p-6">
 
-        {/* Questions List */}
-        <div className="px-6 pb-4">
-          <h4 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">Sorular Listesi</h4>
-          {questions.length === 0 ? (
-            <div className="text-center py-8 text-sm text-muted">
-              Henüz soru eklenmemiş
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {questions.map((question, index) => (
-                <div 
-                  key={question.id}
-                  className={`border rounded-lg p-4 cursor-pointer hover:bg-cream/50 transition-colors ${
-                    index === currentQuestionIndex ? 'border-sage-l bg-sage-pale' : 'border-gray-200'
-                  }`}
-                  onClick={() => setCurrentQuestionIndex(index)}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-muted">Soru {index + 1}</span>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-medium ${getStatusColor(question.type)}`}>
-                        {getStatusLabel(question.type)}
-                      </span>
+            {/* Yeni soru formu */}
+            {adding && (
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold text-charcoal">Yeni Soru Ekle</h4>
+
+                <div>
+                  <label className="label">Soru Metni *</label>
+                  <textarea className="input w-full resize-none" rows={3}
+                    placeholder="Sorunuzu buraya yazın…"
+                    value={newQ.text}
+                    onChange={e => setNewQ(n => ({ ...n, text: e.target.value }))} />
+                </div>
+
+                <div>
+                  <label className="label">Soru Türü</label>
+                  <select className="input" value={newQ.type}
+                    onChange={e => changeNewType(e.target.value as QType)}>
+                    {(Object.entries(TYPE_LABELS) as [QType, string][]).map(([v, l]) => (
+                      <option key={v} value={v}>{l}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {newQ.type !== 'text' && (
+                  <div>
+                    <label className="label">Seçenekler & Puanlar</label>
+                    <div className="space-y-2">
+                      {newQ.options.map((opt, oi) => (
+                        <div key={oi} className="flex items-center gap-2">
+                          <input className="input flex-1" placeholder={`Seçenek ${oi + 1}`}
+                            value={opt.label}
+                            readOnly={newQ.type === 'scale' || newQ.type === 'true_false'}
+                            onChange={e => updateNewOption(oi, 'label', e.target.value)} />
+                          <div className="relative w-24 flex-shrink-0">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-xs pointer-events-none">puan</span>
+                            <input className="input pl-11 text-right" type="number"
+                              value={opt.score}
+                              readOnly={newQ.type === 'scale'}
+                              onChange={e => updateNewOption(oi, 'score', Number(e.target.value))} />
+                          </div>
+                          {newQ.type === 'multiple_choice' && newQ.options.length > 2 && (
+                            <button onClick={() => setNewQ(n => ({ ...n, options: n.options.filter((_, j) => j !== oi) }))}
+                              className="text-muted hover:text-red-500 flex-shrink-0">
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {newQ.type === 'multiple_choice' && (
+                        <button onClick={() => setNewQ(n => ({ ...n, options: [...n.options, { label: '', score: 0 }] }))}
+                          className="btn-outline text-xs py-1.5 px-3 flex items-center gap-1">
+                          <Plus size={12} /> Seçenek Ekle
+                        </button>
+                      )}
+                      {newQ.type === 'scale' && (
+                        <p className="text-[11px] text-muted">Ölçekli sorularda 0–10 seçenekleri otomatik ayarlanır.</p>
+                      )}
                     </div>
                   </div>
-                  <div className="text-sm text-gray-600">
-                    {question.text}
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <button onClick={handleAddQuestion} className="btn-primary flex items-center gap-1.5">
+                    <Plus size={14} /> Soruyu Ekle
+                  </button>
+                  <button onClick={() => setAdding(false)} className="btn-outline">İptal</button>
+                </div>
+              </div>
+            )}
+
+            {/* Mevcut soru düzenleme */}
+            {editQ && editIndex !== null && !adding && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-charcoal">{editIndex + 1}. Soruyu Düzenle</h4>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setEditIndex(Math.max(0, editIndex - 1))}
+                      disabled={editIndex === 0} className="btn-outline py-1 px-2 text-xs disabled:opacity-40">
+                      <ChevronLeft size={14} />
+                    </button>
+                    <button onClick={() => setEditIndex(Math.min(questions.length - 1, editIndex + 1))}
+                      disabled={editIndex === questions.length - 1} className="btn-outline py-1 px-2 text-xs disabled:opacity-40">
+                      <ChevronRight size={14} />
+                    </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+
+                <div>
+                  <label className="label">Soru Metni *</label>
+                  <textarea className="input w-full resize-none" rows={3}
+                    value={editQ.text}
+                    onChange={e => updateEdit('text', e.target.value)} />
+                </div>
+
+                <div>
+                  <label className="label">Soru Türü</label>
+                  <select className="input" value={editQ.type}
+                    onChange={e => changeEditType(e.target.value as QType)}>
+                    {(Object.entries(TYPE_LABELS) as [QType, string][]).map(([v, l]) => (
+                      <option key={v} value={v}>{l}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {editQ.type !== 'text' && (
+                  <div>
+                    <label className="label">Seçenekler & Puanlar</label>
+                    <div className="space-y-2">
+                      {(editQ.options ?? []).map((opt, oi) => (
+                        <div key={oi} className="flex items-center gap-2">
+                          <input className="input flex-1" placeholder={`Seçenek ${oi + 1}`}
+                            value={opt.label}
+                            readOnly={editQ.type === 'scale' || editQ.type === 'true_false'}
+                            onChange={e => updateEditOption(oi, 'label', e.target.value)} />
+                          <div className="relative w-24 flex-shrink-0">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-xs pointer-events-none">puan</span>
+                            <input className="input pl-11 text-right" type="number"
+                              value={opt.score}
+                              readOnly={editQ.type === 'scale'}
+                              onChange={e => updateEditOption(oi, 'score', Number(e.target.value))} />
+                          </div>
+                          {editQ.type === 'multiple_choice' && (editQ.options?.length ?? 0) > 2 && (
+                            <button onClick={() => updateEdit('options', (editQ.options ?? []).filter((_, j) => j !== oi))}
+                              className="text-muted hover:text-red-500 flex-shrink-0">
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {editQ.type === 'multiple_choice' && (
+                        <button onClick={() => updateEdit('options', [...(editQ.options ?? []), { label: '', score: 0 }])}
+                          className="btn-outline text-xs py-1.5 px-3 flex items-center gap-1">
+                          <Plus size={12} /> Seçenek Ekle
+                        </button>
+                      )}
+                      {editQ.type === 'scale' && (
+                        <p className="text-[11px] text-muted">Ölçekli sorularda 0–10 seçenekleri otomatik ayarlanır.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <button onClick={() => deleteQuestion(editIndex)}
+                  className="btn-outline text-red-500 border-red-200 hover:bg-red-50 text-xs flex items-center gap-1.5 py-1.5 px-3">
+                  <Trash2 size={13} /> Bu Soruyu Sil
+                </button>
+              </div>
+            )}
+
+            {/* Boş durum */}
+            {!adding && editQ === null && (
+              <div className="h-full flex flex-col items-center justify-center text-center py-16">
+                <p className="text-sm text-muted mb-4">
+                  {questions.length === 0
+                    ? 'Henüz soru eklenmedi. Başlamak için "Yeni Soru" butonuna tıklayın.'
+                    : 'Düzenlemek için sol taraftan bir soru seçin.'}
+                </p>
+                <button onClick={() => setAdding(true)} className="btn-primary flex items-center gap-1.5">
+                  <Plus size={14} /> Yeni Soru Ekle
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
   )
-}
-
-function getStatusColor(type: string) {
-  switch (type) {
-    case 'multiple_choice': return 'text-blue-600'
-    case 'text': return 'text-purple-600'
-    case 'scale': return 'text-orange-600'
-    case 'true_false': return 'text-gray-600'
-    default: return 'text-gray-600'
-  }
-}
-
-function getStatusLabel(type: string) {
-  switch (type) {
-    case 'multiple_choice': return 'Çoktan Seçmeli'
-    case 'text': return 'Metin'
-    case 'scale': return 'Ölçekli'
-    case 'true_false': return 'Doğru/Yanlış'
-    default: return 'Metin'
-  }
 }

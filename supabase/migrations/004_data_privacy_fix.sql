@@ -23,6 +23,12 @@ from public.profiles;
 grant usage on schema public to anon, authenticated;
 grant select on public.public_profiles to anon, authenticated;
 
+-- ÇAKIŞMALARI ÖNLEMEK İÇİN ESKİ POLİTİKALARI KALDIR
+drop policy if exists "profiles_owner_select" on public.profiles;
+drop policy if exists "profiles_owner_insert" on public.profiles;
+drop policy if exists "profiles_owner_update" on public.profiles;
+drop policy if exists "profiles_owner_delete" on public.profiles;
+
 -- Create new policy for profiles (owner access only)
 create policy "profiles_owner_select" on public.profiles for select 
 using (auth.uid() = id);

@@ -6,7 +6,7 @@ import { checkRateLimit, appointmentRateLimit, RATE_OPTS } from '@/lib/upstash-r
 
 // ── E-posta gönderici (Resend) ────────────────────────────────────────────────
 async function sendAppointmentNotification(opts: {
-  to:          string          // psikolog e-postası
+  to:          string
   psychName:   string
   guestName:   string
   guestPhone:  string
@@ -17,12 +17,12 @@ async function sendAppointmentNotification(opts: {
 }) {
   const key  = process.env.RESEND_API_KEY
   const from = process.env.RESEND_FROM_EMAIL || 'bildirim@psikopanel.tr'
-  if (!key) return   // RESEND tanımlı değilse sessizce atla
+  if (!key) return
 
   const dateStr = opts.startsAt
     ? new Date(opts.startsAt).toLocaleString('tr-TR', {
         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-        hour: '2-digit', minute: '2-digit',
+        hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul',
       })
     : 'Belirtilmedi'
 
@@ -39,18 +39,15 @@ async function sendAppointmentNotification(opts: {
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#faf8f4;font-family:system-ui,sans-serif;">
   <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.08);">
-    <!-- Header -->
     <div style="background:linear-gradient(135deg,#5a7a6a,#2c2c2c);padding:32px 28px;text-align:center;">
       <p style="margin:0 0 8px;color:rgba(255,255,255,.6);font-size:12px;letter-spacing:.05em;text-transform:uppercase;">PsikoPanel Bildirimi</p>
       <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">Yeni Randevu Talebi</h1>
     </div>
-    <!-- Merhaba -->
     <div style="padding:28px 28px 0;">
       <p style="margin:0 0 20px;color:#5a5a5a;font-size:14px;line-height:1.6;">
         Merhaba <strong>${opts.psychName}</strong>,<br>
         Aşağıda detaylarını görebileceğiniz yeni bir randevu talebi oluşturuldu.
       </p>
-      <!-- Danışan kartı -->
       <div style="background:#faf8f4;border-radius:12px;padding:20px;margin-bottom:20px;">
         <table style="width:100%;border-collapse:collapse;">
           <tr>
@@ -75,7 +72,6 @@ async function sendAppointmentNotification(opts: {
           </tr>
         </table>
       </div>
-      <!-- CTA -->
       <div style="text-align:center;margin:24px 0;">
         <a href="${opts.appUrl}/panel/calendar"
           style="display:inline-block;background:#5a7a6a;color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-size:14px;font-weight:600;">
@@ -83,18 +79,15 @@ async function sendAppointmentNotification(opts: {
         </a>
       </div>
     </div>
-    <!-- Footer -->
     <div style="padding:0 28px 24px;text-align:center;border-top:1px solid #e2ddd6;margin-top:8px;padding-top:16px;">
-      <p style="margin:0;font-size:11px;color:#9a9a9a;">
-        Bu e-postayı PsikoPanel üzerinden aldınız.
-      </p>
+      <p style="margin:0;font-size:11px;color:#9a9a9a;">Bu e-postayı PsikoPanel üzerinden aldınız.</p>
     </div>
   </div>
 </body>
 </html>
       `,
     }),
-  }).catch(() => {/* e-posta başarısız olsa da randevu kaydedilmeli */})
+  }).catch(() => {})
 }
 
 // ── GET ───────────────────────────────────────────────────────────────────────
@@ -104,14 +97,33 @@ export async function GET(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
-  const from = searchParams.get('from')
+  const teamId = searchParams.get('team_id')
+  const from   = searchParams.get('from')
   const to   = searchParams.get('to')
 
   let query = supabase
     .from('appointments')
-    .select('*, client:clients(full_name, phone)')
-    .eq('psychologist_id', user.id)
-    .order('starts_at')
+    .select(`
+      *, 
+      client:clients(full_name, phone),
+      psychologist:profiles!psychologist_id(id, full_name, title, slug)
+    `)
+
+  // Eğer team_id varsa, o takıma ait tüm randevuları getir
+  if (teamId) {
+    // Takım üyelerinin randevularını getir
+    const { data: teamMembers } = await supabase
+      .from('team_members')
+      .select('psychologist_id')
+      .eq('team_id', teamId)
+      .eq('status', 'accepted')
+    
+    const memberIds = teamMembers?.map(m => m.psychologist_id) || []
+    query = query.in('psychologist_id', memberIds)
+  } else {
+    // Kişisel randevuları getir
+    query = query.eq('psychologist_id', user.id)
+  }
 
   if (from) query = query.gte('starts_at', from)
   if (to)   query = query.lte('starts_at', to)
@@ -140,7 +152,6 @@ export async function POST(req: Request) {
     if (!guest_name) return NextResponse.json({ error: 'Danışan adı zorunlu' }, { status: 400 })
     if (!starts_at)  return NextResponse.json({ error: 'Tarih zorunlu' }, { status: 400 })
 
-    // Çifte randevu kontrolü (panel tarafı)
     const panelConflict = await checkConflict(supabase, user.id, starts_at, duration_min ?? 50)
     if (panelConflict)
       return NextResponse.json(
@@ -180,8 +191,11 @@ export async function POST(req: Request) {
   if (!guest_email)
     return NextResponse.json({ error: 'E-posta zorunludur' }, { status: 400 })
 
-  // Çifte randevu kontrolü (public booking)
-  // starts_at yoksa tarih seçilmemiş demek → çakışma kontrolü atlanır
+  // Service client — hem conflict check hem insert için kullan
+  // (public request'te anon client'ın RLS'i appointments'a INSERT yapmasını engeller)
+  const supabase = await createServiceClient()
+
+  // Çifte randevu kontrolü — service client ile yapılır
   if (starts_at) {
     const publicConflict = await checkConflict(
       supabase, bodyPsychologistId, starts_at, duration_min ?? 50
@@ -198,8 +212,6 @@ export async function POST(req: Request) {
     try { parsedPush = JSON.parse(push_subscription) } catch { /* geçersiz */ }
   }
 
-  const supabase = await createServiceClient()
-
   // Psikolog profilini al (e-posta + isim için)
   const { data: psychProfile } = await supabase
     .from('profiles')
@@ -207,7 +219,7 @@ export async function POST(req: Request) {
     .eq('id', bodyPsychologistId)
     .single()
 
-  // Randevuyu kaydet
+  // Randevuyu kaydet — status: 'pending' (onay bekliyor)
   const { data, error } = await supabase
     .from('appointments')
     .insert({
@@ -228,7 +240,7 @@ export async function POST(req: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // ── Psikologu e-posta ile bildir (fire-and-forget) ───────────────────────
+  // Psikologu e-posta ile bildir (fire-and-forget)
   if (psychProfile?.email) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://psikopanel.tr'
     sendAppointmentNotification({
@@ -240,7 +252,7 @@ export async function POST(req: Request) {
       sessionType: session_type || 'Bireysel Terapi',
       startsAt:    starts_at    || null,
       appUrl,
-    }) // await yok — yanıtı bloklamaz
+    })
   }
 
   const res = NextResponse.json(data, { status: 201 })
@@ -299,27 +311,42 @@ export async function DELETE(req: Request) {
 }
 
 // ── Çifte randevu kontrolü ────────────────────────────────────────────────────
-// istek süresi (durationMin) dikkate alınarak ±(dur/2) dakikalık pencere kontrol edilir.
-// Örn: 50 dk'lık seans → ±25 dk = 09:00 randevusu için 08:35-09:25 arası dolu sayılır.
+// Yeni randevu [newStart, newEnd) ile mevcut randevuların [start, end) aralığını karşılaştırır.
+// Kesişim varsa → çakışma var demek.
+// Çakışma koşulu: mevcut.start < yeni.end AND mevcut.end > yeni.start
 async function checkConflict(
   supabase: SupabaseClient,
   psychologistId: string,
   startsAt: string,
   durationMin: number
 ): Promise<boolean> {
-  const requestedStart = new Date(startsAt).getTime()
-  const halfDur        = (durationMin / 2) * 60 * 1000   // ms
+  const newStart = new Date(startsAt)
+  const newEnd   = new Date(newStart.getTime() + durationMin * 60 * 1000)
 
-  const windowStart = new Date(requestedStart - halfDur).toISOString()
-  const windowEnd   = new Date(requestedStart + halfDur).toISOString()
+  // Mevcut randevuları geniş pencerede çek (yeni seansın başından 24 saat öncesine kadar)
+  // Sonra uygulama tarafında gerçek çakışma kontrolü yap
+  const windowFrom = new Date(newStart.getTime() - 24 * 60 * 60 * 1000).toISOString()
+  const windowTo   = newEnd.toISOString()
 
-  const { count } = await supabase
+  const { data: existing } = await supabase
     .from('appointments')
-    .select('id', { count: 'exact', head: true })
+    .select('starts_at, duration_min')
     .eq('psychologist_id', psychologistId)
     .in('status', ['pending', 'confirmed'])
-    .gte('starts_at', windowStart)
-    .lte('starts_at', windowEnd)
+    .gte('starts_at', windowFrom)
+    .lte('starts_at', windowTo)
 
-  return (count ?? 0) > 0
+  if (!existing || existing.length === 0) return false
+
+  // Gerçek aralık kesişimi kontrolü
+  for (const appt of existing) {
+    const existStart = new Date(appt.starts_at)
+    const existEnd   = new Date(existStart.getTime() + (appt.duration_min ?? 50) * 60 * 1000)
+    // Kesişim: existStart < newEnd AND existEnd > newStart
+    if (existStart < newEnd && existEnd > newStart) {
+      return true
+    }
+  }
+
+  return false
 }

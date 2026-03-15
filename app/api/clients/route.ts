@@ -2,17 +2,38 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
-export async function GET() {
+export async function GET(req: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data, error } = await supabase
+  const { searchParams } = new URL(req.url)
+  const teamId = searchParams.get('team_id')
+
+  let query = supabase
     .from('clients')
-    .select('*')
-    .eq('psychologist_id', user.id)
+    .select(`
+      *,
+      psychologist:profiles!psychologist_id(id, full_name, title, slug)
+    `)
     .order('full_name')
 
+  if (teamId) {
+    // Takım üyelerinin danışanlarını getir
+    const { data: teamMembers } = await supabase
+      .from('team_members')
+      .select('psychologist_id')
+      .eq('team_id', teamId)
+      .eq('status', 'accepted')
+    
+    const memberIds = teamMembers?.map(m => m.psychologist_id) || []
+    query = query.in('psychologist_id', [...memberIds, user.id]) // Takım üyeleri + kendi danışanları
+  } else {
+    // Sadece kendi danışanlarını getir
+    query = query.eq('psychologist_id', user.id)
+  }
+
+  const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }

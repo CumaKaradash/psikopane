@@ -2,6 +2,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import HomeworkForm from '@/components/client/HomeworkForm'
+import { BookOpen } from 'lucide-react'
 
 interface Props {
   params: Promise<{ slug: string; odevId: string }>
@@ -19,15 +20,34 @@ export default async function OdevPage({ params: rawParams }: Props) {
 
   if (!profile) notFound()
 
+  // is_active filtresi kaldırıldı — pasif ödevler için bilgi ekranı gösterilecek
   const { data: homework } = await supabase
     .from('homework')
     .select('*')
     .eq('psychologist_id', profile.id)
     .eq('slug', odevId)
-    .eq('is_active', true)
     .single()
 
   if (!homework) notFound()
+
+  // Pasif ödev: teslim ekranı yerine bilgi ekranı göster
+  if (!homework.is_active) {
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-accent-l via-cream to-sage-pale flex items-center justify-center px-4">
+        <div className="w-full max-w-sm text-center">
+          <div className="w-16 h-16 rounded-2xl bg-white border border-border shadow-sm flex items-center justify-center mx-auto mb-6">
+            <BookOpen size={28} className="text-muted opacity-40" />
+          </div>
+          <h1 className="font-serif text-2xl text-charcoal mb-3">Ödev Şu An Aktif Değil</h1>
+          <p className="text-sm text-muted leading-relaxed">
+            Bu ödev psikologunuz tarafından geçici olarak devre dışı bırakılmıştır.
+            Psikologunuzla iletişime geçebilirsiniz.
+          </p>
+          <p className="text-xs text-muted mt-8 opacity-50">Powered by PsikoPanel</p>
+        </div>
+      </main>
+    )
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-accent-l via-cream to-sage-pale py-10 px-4">

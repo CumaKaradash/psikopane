@@ -4,8 +4,11 @@
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 
-// ─── Upstash Redis (yalnızca env tanımlıysa başlat) ─────────────────────────
+// ─── Upstash Redis (geçici olarak devre dışı) ─────────────────────────
 function makeRedis() {
+  // Geçici olarak null döndürerek in-memory fallback'ü zorla
+  return null
+  
   if (
     process.env.UPSTASH_REDIS_REST_URL &&
     process.env.UPSTASH_REDIS_REST_TOKEN

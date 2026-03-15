@@ -4,6 +4,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
+type TeamMemberStatus = 'pending' | 'accepted' | 'rejected' | 'blocked'
+
 // ── Slug yardımcısı ───────────────────────────────────────────────────────────
 function toSlug(text: string): string {
   return text
@@ -37,7 +39,7 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const [{ data: sent }, { data: received }, { data: teams }] = await Promise.all([
+  const [{ data: sent }, { data: received }, { data: teams }, { data: teamInvitations }] = await Promise.all([
     supabase
       .from('connections')
       .select('*, addressee:profiles!addressee_id(id, full_name, title, slug)')
@@ -52,11 +54,20 @@ export async function GET() {
       .from('teams')
       .select(`
         *, members:team_members(
-          id, psychologist_id, role, joined_at,
+          id, psychologist_id, role, status, joined_at,
           profile:profiles!psychologist_id(id, full_name, title, slug)
         )
       `)
       .eq('owner_id', user.id)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('team_members')
+      .select(`
+        *, team:teams(id, name, slug, description),
+        profile:profiles!psychologist_id(id, full_name, title, slug)
+      `)
+      .eq('psychologist_id', user.id)
+      .eq('status', 'pending')
       .order('created_at', { ascending: false }),
   ])
 
@@ -64,6 +75,7 @@ export async function GET() {
     sent:     sent     ?? [],
     received: received ?? [],
     teams:    teams    ?? [],
+    teamInvitations: teamInvitations ?? [],
   })
 }
 
@@ -168,7 +180,7 @@ export async function POST(req: Request) {
     // Sahibi otomatik owner olarak ekle
     await supabase
       .from('team_members')
-      .insert({ team_id: team.id, psychologist_id: user.id, role: 'owner' })
+      .insert({ team_id: team.id, psychologist_id: user.id, role: 'owner', status: 'accepted' })
 
     return NextResponse.json(team, { status: 201 })
   }
@@ -220,18 +232,79 @@ export async function PATCH(req: Request) {
         { status: 403 }
       )
 
+    // Önce kişinin mevcut durumunu kontrol et
+    const { data: existingMember } = await supabase
+      .from('team_members')
+      .select('id, status')
+      .eq('team_id', team_id)
+      .eq('psychologist_id', psychologist_id)
+      .single()
+
+    let finalData
+    let statusCode = 201
+
+    // Eğer kişi zaten üye ve durumu 'rejected' ise, durumunu 'pending' yaparak tekrar davet et
+    if (existingMember && existingMember.status === 'rejected') {
+      const { data: updatedMember } = await supabase
+        .from('team_members')
+        .update({ 
+          status: 'pending',
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', existingMember.id)
+        .select()
+        .single()
+
+      if (updatedMember) {
+        finalData = updatedMember
+        statusCode = 200 // Updated existing record
+      } else {
+        return NextResponse.json({ error: 'Tekrar davet gönderilemedi' }, { status: 500 })
+      }
+    } else {
+      // Yeni üye ekle
+      const { data, error } = await supabase
+        .from('team_members')
+        .insert({ team_id, psychologist_id, role: 'member', status: 'pending' })
+        .select()
+        .single()
+
+      if (error) {
+        if (error.message.includes('unique'))
+          return NextResponse.json({ error: 'Bu kişi zaten takım üyesi' }, { status: 409 })
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      finalData = data
+    }
+
+    return NextResponse.json(finalData, { status: statusCode })
+  }
+
+  // ── Takım davetini yanıtla ───────────────────────────────────────────────────
+  if (body.action === 'respond_team_invite') {
+    const { team_id, status } = body
+    if (!['pending', 'accepted', 'rejected', 'blocked'].includes(status))
+      return NextResponse.json({ error: 'Eksik veya geçersiz alan' }, { status: 400 })
+
     const { data, error } = await supabase
       .from('team_members')
-      .insert({ team_id, psychologist_id, role: 'member' })
+      .update({ 
+        status, 
+        updated_at: new Date().toISOString() 
+      })
+      .eq('team_id', team_id)
+      .eq('psychologist_id', user.id)
       .select()
       .single()
 
     if (error) {
-      if (error.message.includes('unique'))
-        return NextResponse.json({ error: 'Bu kişi zaten takım üyesi' }, { status: 409 })
+      if (error.message.includes('No rows matched')) {
+        return NextResponse.json({ error: 'Takım daveti bulunamadı' }, { status: 404 })
+      }
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
-    return NextResponse.json(data, { status: 201 })
+
+    return NextResponse.json(data)
   }
 
   return NextResponse.json({ error: 'Geçersiz action' }, { status: 400 })

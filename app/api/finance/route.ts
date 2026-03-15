@@ -8,7 +8,7 @@ export async function GET(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
-  const month = searchParams.get('month') // YYYY-MM
+  const month = searchParams.get('month')
 
   let query = supabase
     .from('finance_entries')
@@ -54,4 +54,53 @@ export async function POST(req: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data, { status: 201 })
+}
+
+export async function PATCH(req: Request) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json()
+  const { id, type, amount, description, entry_date } = body
+  if (!id) return NextResponse.json({ error: 'ID zorunlu' }, { status: 400 })
+
+  const updates: Record<string, unknown> = {}
+  if (type        !== undefined) updates.type        = type
+  if (amount      !== undefined) updates.amount      = parseInt(amount)
+  if (description !== undefined) updates.description = description
+  if (entry_date  !== undefined) updates.entry_date  = entry_date
+
+  if (Object.keys(updates).length === 0)
+    return NextResponse.json({ error: 'Güncellenecek alan yok' }, { status: 400 })
+
+  const { data, error } = await supabase
+    .from('finance_entries')
+    .update(updates)
+    .eq('id', id)
+    .eq('psychologist_id', user.id)
+    .select()
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data)
+}
+
+export async function DELETE(req: Request) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { searchParams } = new URL(req.url)
+  const id = searchParams.get('id')
+  if (!id) return NextResponse.json({ error: 'ID zorunlu' }, { status: 400 })
+
+  const { error } = await supabase
+    .from('finance_entries')
+    .delete()
+    .eq('id', id)
+    .eq('psychologist_id', user.id)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ success: true })
 }

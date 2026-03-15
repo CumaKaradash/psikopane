@@ -16,7 +16,6 @@ export default async function CommunityPage() {
       author:profiles!psychologist_id(id, full_name, title, slug)
     `)
     .eq('is_public', true)
-    .neq('psychologist_id', user.id)
     .order('created_at', { ascending: false })
     .limit(120)
 
@@ -55,6 +54,7 @@ export default async function CommunityPage() {
       <CommunityClient
         publicTests={publicTests ?? []}
         myPublicCount={myPublicCount ?? 0}
+        currentUserId={user.id}
       />
     </>
   )

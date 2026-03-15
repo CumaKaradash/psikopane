@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="tr">
-      <body className={`${dmSans.variable} ${dmSerif.variable} font-sans bg-cream text-charcoal`}>
+      <body className={`${dmSans.variable} ${dmSerif.variable} font-sans bg-cream text-charcoal`} suppressHydrationWarning>
         {children}
         <Toaster
           position="bottom-right"

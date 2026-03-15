@@ -25,12 +25,18 @@ interface Connection {
 }
 
 interface TeamMember {
-  id: string; psychologist_id: string; role: string; joined_at: string
+  id: string; psychologist_id: string; role: string; status: 'pending' | 'accepted' | 'rejected' | 'blocked'; joined_at: string
+  profile?: Profile
+}
+
+interface TeamInvitation {
+  id: string; team_id: string; psychologist_id: string; role: string; status: string; joined_at: string
+  team?: { id: string; name: string; slug: string; description?: string }
   profile?: Profile
 }
 
 interface Team {
-  id: string; name: string; description?: string | null
+  id: string; name: string; slug: string; description?: string | null
   owner_id: string; created_at: string
   members?: TeamMember[]
 }
@@ -40,6 +46,7 @@ interface Props {
   sentConnections:     Connection[]
   receivedConnections: Connection[]
   teams:               Team[]
+  teamInvitations:     TeamInvitation[]
 }
 
 type Tab = 'connections' | 'teams'
@@ -71,12 +78,13 @@ function StatusBadge({ status }: { status: string }) {
 
 /* ─── Ana bileşen ─────────────────────────────────────────────────────────── */
 export default function NetworkClient({
-  currentUserId, sentConnections, receivedConnections, teams: initialTeams,
+  currentUserId, sentConnections, receivedConnections, teams: initialTeams, teamInvitations: initialTeamInvitations,
 }: Props) {
   const [tab,          setTab]          = useState<Tab>('connections')
   const [sent,         setSent]         = useState(sentConnections)
   const [received,     setReceived]     = useState(receivedConnections)
   const [teams,        setTeams]        = useState(initialTeams)
+  const [teamInvitations, setTeamInvitations] = useState(initialTeamInvitations)
   const [email,        setEmail]        = useState('')
   const [teamName,     setTeamName]     = useState('')
   const [teamDesc,     setTeamDesc]     = useState('')
@@ -91,6 +99,7 @@ export default function NetworkClient({
     ...received.filter(c => c.status === 'accepted'),
   ]
   const pendingSent     = sent.filter(c => c.status === 'pending')
+  const rejectedInvites = teamInvitations.filter(inv => inv.status === 'rejected')
 
   /* ── Bağlantı isteği gönder ──────────────────────────────────────────── */
   async function sendConnect(e: React.FormEvent) {
@@ -166,6 +175,56 @@ export default function NetworkClient({
     }
   }
 
+  /* ── Takım davetini yanıtla ───────────────────────────────────────────── */
+  async function respondToTeamInvitation(teamId: string, status: 'accepted' | 'rejected') {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/network', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'respond_team_invite', team_id: teamId, status }),
+      })
+      if (res.ok) {
+        setTeamInvitations(inv => inv.filter(inv => inv.team_id !== teamId))
+        toast.success(status === 'accepted' ? '✅ Takım daveti kabul edildi!' : 'Takım daveti reddedildi')
+      } else {
+        const data = await res.json()
+        toast.error(data.error || 'İşlem başarısız')
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'İşlem başarısız')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  /* ── Reddedilen daveti geri al ───────────────────────────────────────── */
+  async function reInviteTeamMember(teamId: string, invitationId: string) {
+    setLoading(true)
+    try {
+      // Önce mevcut daveti bulup status'ünü pending yap
+      const res = await fetch('/api/network', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'respond_team_invite', team_id: teamId, status: 'pending' }),
+      })
+      if (res.ok) {
+        // Daveti reddilenler listesinden kaldır
+        setTeamInvitations(inv => inv.filter(inv => inv.id !== invitationId))
+        // Bekleyen davetler listesine ekle (isteğe bağlı)
+        // setTeamInvitations(inv => [...inv.filter(inv => inv.id !== invitationId), { ...updatedInvitation, status: 'pending' }])
+        toast.success('✅ Davet yeniden gönderildi!')
+      } else {
+        const data = await res.json()
+        toast.error(data.error || 'İşlem başarısız')
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'İşlem başarısız')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   /* ── Takıma üye ekle ────────────────────────────────────────────────── */
   async function addMember(teamId: string) {
     if (!addMemberEmail.trim()) return
@@ -193,7 +252,7 @@ export default function NetworkClient({
         t.id !== teamId ? t : {
           ...t,
           members: [...(t.members ?? []), {
-            id: added.id, psychologist_id: found.id, role: 'member', joined_at: added.joined_at,
+            id: added.id, psychologist_id: found.id, role: 'member', status: 'pending', joined_at: added.joined_at,
             profile: { id: found.id, full_name: found.full_name, title: found.title, slug: found.slug },
           }],
         }
@@ -217,7 +276,7 @@ export default function NetworkClient({
           { key: 'connections', label: 'Bağlantılar', icon: Users,
             badge: pendingReceived.length, count: acceptedConns.length },
           { key: 'teams',       label: 'Takımlar',    icon: Building2,
-            badge: 0, count: teams.length },
+            badge: teamInvitations.length, count: teams.length },
         ] as const).map(({ key, label, icon: Icon, badge, count }) => (
           <button key={key} onClick={() => setTab(key)}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-medium transition-all
@@ -414,71 +473,136 @@ export default function NetworkClient({
             </button>
           </div>
 
-          {teams.length === 0 ? (
-            <div className="card py-16 text-center">
-              <Building2 size={36} className="mx-auto text-muted opacity-30 mb-3" />
-              <p className="text-sm font-medium text-muted">Henüz takımınız yok.</p>
-              <p className="text-xs text-muted mt-1 mb-4">
-                Klinik veya araştırma grupları oluşturun, meslektaşlarınızı ekleyin.
-              </p>
-              <button onClick={() => setTeamModal(true)} className="btn-primary mx-auto">
-                İlk takımı oluştur
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {teams.map(team => (
-                <div key={team.id} className="card overflow-hidden">
-                  {/* Takım başlığı */}
-                  <div className="px-5 py-4 flex items-center justify-between border-b border-border">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-charcoal flex items-center justify-center flex-shrink-0">
-                        <Building2 size={18} className="text-white" />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-semibold">{team.name}</h4>
-                        {team.description && (
-                          <p className="text-xs text-muted mt-0.5">{team.description}</p>
-                        )}
-                      </div>
+          {/* Bekleyen Takım Davetleri */}
+          {teamInvitations.length > 0 && (
+            <div className="card overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-border bg-orange-50 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                <h3 className="text-sm font-semibold text-orange-800">
+                  {teamInvitations.length} Bekleyen Takım Daveti
+                </h3>
+              </div>
+              <ul className="divide-y divide-border/60">
+                {teamInvitations.map(inv => (
+                  <li key={inv.id} className="flex items-center gap-4 px-5 py-4 hover:bg-cream/40 transition-colors">
+                    <div className="w-10 h-10 rounded-xl bg-charcoal flex items-center justify-center flex-shrink-0">
+                      <Building2 size={18} className="text-white" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="pill-sage">{team.members?.length ?? 1} üye</span>
-                      {team.owner_id === currentUserId && (
-                        <button
-                          onClick={() => setMemberModal(team.id)}
-                          className="btn-outline py-1 px-2.5 text-xs flex items-center gap-1"
-                        >
-                          <UserPlus size={12} /> Üye Ekle
-                        </button>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">{inv.team?.name ?? '—'}</p>
+                      <p className="text-xs text-muted truncate">{inv.team?.description ?? ''}</p>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button onClick={() => respondToTeamInvitation(inv.team_id, 'accepted')}
+                        className="btn-primary py-1.5 px-3 text-xs flex items-center gap-1">
+                        <Check size={12} /> Kabul Et
+                      </button>
+                      <button onClick={() => respondToTeamInvitation(inv.team_id, 'rejected')}
+                        className="btn-outline py-1.5 px-3 text-xs flex items-center gap-1 text-red-500 hover:border-red-300">
+                        <X size={12} /> Reddet
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Aktif Takımlarım */}
+          <div className="card overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Building2 size={14} className="text-sage" />
+                Aktif Takımlarım
+                <span className="text-xs text-muted font-normal">({teams.length})</span>
+              </h3>
+            </div>
+            {teams.length === 0 ? (
+              <div className="px-5 py-12 text-center">
+                <Building2 size={32} className="mx-auto text-muted opacity-30 mb-3" />
+                <p className="text-sm text-muted">Henüz takımınız yok.</p>
+                <p className="text-xs text-muted mt-1">Klinik veya araştırma grupları oluşturun, meslektaşlarınızı ekleyin.</p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-border/40">
+                {teams.map(team => (
+                  <li key={team.id} className="hover:bg-cream/30 transition-colors">
+                    <div className="px-5 py-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-charcoal flex items-center justify-center flex-shrink-0">
+                            <Building2 size={18} className="text-white" />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-semibold">{team.name}</h4>
+                            {team.description && (
+                              <p className="text-xs text-muted mt-0.5">{team.description}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="pill-sage">{team.members?.filter(m => m.status === 'accepted').length ?? 1} üye</span>
+                          <a
+                            href={`/panel/takimlar/${team.slug}`}
+                            className="btn-outline py-1 px-2.5 text-xs flex items-center gap-1"
+                          >
+                            <ChevronRight size={12} /> Takım Paneli
+                          </a>
+                        </div>
+                      </div>
+                      {/* Üye listesi */}
+                      {team.members && team.members.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-border/40">
+                          <div className="flex flex-wrap gap-2">
+                            {team.members.filter(m => m.status === 'accepted').map(m => (
+                              <div key={m.id} className="flex items-center gap-2 text-xs text-muted">
+                                <Avatar name={m.profile?.full_name ?? '?'} size="sm" />
+                                <span>{m.profile?.full_name ?? '—'}</span>
+                                {m.role === 'owner' && <span className="text-accent">👑</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
                     </div>
-                  </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
-                  {/* Üye listesi */}
-                  {team.members && team.members.length > 0 ? (
-                    <ul className="divide-y divide-border/40">
-                      {team.members.map(m => (
-                        <li key={m.id}
-                          className="flex items-center gap-3 px-5 py-3 hover:bg-cream/30 transition-colors">
-                          <Avatar name={m.profile?.full_name ?? '?'} size="sm" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium truncate">{m.profile?.full_name ?? '—'}</p>
-                            <p className="text-[11px] text-muted truncate">{m.profile?.title ?? ''}</p>
-                          </div>
-                          <span className={m.role === 'owner'
-                            ? 'text-[10px] font-bold text-accent'
-                            : 'text-[10px] text-muted'}>
-                            {m.role === 'owner' ? '👑 Sahip' : 'Üye'}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="px-5 py-4 text-xs text-muted">Henüz üye yok.</p>
-                  )}
-                </div>
-              ))}
+          {/* Reddedilen Davetler */}
+          {rejectedInvites.length > 0 && (
+            <div className="card overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-border bg-red-50 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+                <h3 className="text-sm font-semibold text-red-800">
+                  {rejectedInvites.length} Reddedilen Davet
+                </h3>
+              </div>
+              <ul className="divide-y divide-border/60">
+                {rejectedInvites.map(inv => (
+                  <li key={inv.id} className="flex items-center gap-4 px-5 py-4 hover:bg-cream/40 transition-colors">
+                    <div className="w-10 h-10 rounded-xl bg-charcoal flex items-center justify-center flex-shrink-0">
+                      <Building2 size={18} className="text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">{inv.team?.name ?? '—'}</p>
+                      <p className="text-xs text-muted truncate">{inv.team?.description ?? ''}</p>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <span className="pill-red text-xs">Reddedildi</span>
+                      <button 
+                        onClick={() => reInviteTeamMember(inv.team_id!, inv.id)}
+                        className="btn-primary py-1.5 px-3 text-xs flex items-center gap-1"
+                        title="Daveti yeniden gönder"
+                      >
+                        <UserPlus size={12} /> Tekrar Davet Et
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>

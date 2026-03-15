@@ -107,7 +107,7 @@ export default function HomeworkClient({ homework: initial, profileSlug }: Props
           const count  = hw.responses?.[0]?.count ?? 0
           const hasQ   = hw.questions && hw.questions.length > 0
           return (
-            <div key={hw.id} className="card p-5">
+            <div key={hw.id} className="card p-5 hover:shadow-md transition-shadow duration-200">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="text-sm font-semibold leading-snug flex-1 pr-2">{hw.title}</h4>
                 <span className={hw.is_active ? 'pill-green' : 'pill-orange'}>
@@ -128,6 +128,10 @@ export default function HomeworkClient({ homework: initial, profileSlug }: Props
               <div className="flex items-center gap-2 flex-wrap">
                 <button onClick={() => copyUrl(hw.slug)}
                   className="btn-outline py-1 px-2.5 text-xs">📋 Kopyala</button>
+                <a href={`/panel/homework/responses/${hw.id}`}
+                  className="btn-primary py-1 px-2.5 text-xs flex items-center gap-1">
+                  👁 Yanıtları Gör {count > 0 && <span className="bg-white/20 rounded-full px-1.5 py-0.5 text-[10px] font-bold">{count}</span>}
+                </a>
                 <button onClick={() => toggleActive(hw.id, hw.is_active)}
                   className="btn-outline py-1 px-2.5 text-xs">
                   {hw.is_active ? 'Pasifleştir' : 'Aktifleştir'}

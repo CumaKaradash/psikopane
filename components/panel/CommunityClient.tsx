@@ -17,12 +17,14 @@ interface PublicTestItem {
   created_at:     string
   is_active:      boolean
   is_public:      boolean
+  psychologist_id: string
   author?: { id: string; full_name: string; title?: string; slug: string } | null
 }
 
 interface Props {
   publicTests:   PublicTestItem[]
   myPublicCount: number
+  currentUserId: string
 }
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
@@ -60,7 +62,7 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(days / 30)} ay önce`
 }
 
-export default function CommunityClient({ publicTests, myPublicCount }: Props) {
+export default function CommunityClient({ publicTests, myPublicCount, currentUserId }: Props) {
   const [search,   setSearch]   = useState('')
   const [catFilter, setCatFilter] = useState<string>('Tümü')
   const [cloning,  setCloning]  = useState<string | null>(null)
@@ -213,6 +215,7 @@ export default function CommunityClient({ publicTests, myPublicCount }: Props) {
           {filtered.map(t => {
             const colors  = CAT_COLORS[t.category]
             const isOpen  = expanded === t.id
+            const isOwn    = t.psychologist_id === currentUserId
             const isDone  = cloned.has(t.id)
             const initials = t.author?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() ?? '?'
 
@@ -226,10 +229,17 @@ export default function CommunityClient({ publicTests, myPublicCount }: Props) {
                 <div className="p-5 flex flex-col flex-1">
                   {/* Üst satır: kategori pill + soru sayısı */}
                   <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${colors.bg} ${colors.text}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${colors.dot}`} />
-                      {t.category}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${colors.bg} ${colors.text}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${colors.dot}`} />
+                        {t.category}
+                      </span>
+                      {isOwn && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-accent/10 text-accent">
+                          Sizin
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[11px] text-muted bg-cream px-2 py-0.5 rounded-full">
                       {t.questions?.length ?? 0} soru
                     </span>
@@ -299,14 +309,18 @@ export default function CommunityClient({ publicTests, myPublicCount }: Props) {
                   {/* Aksiyonlar */}
                   <div className="flex gap-2">
                     <button
-                      onClick={() => cloneTest(t.id, t.title)}
-                      disabled={cloning === t.id || isDone}
+                      onClick={() => !isOwn && cloneTest(t.id, t.title)}
+                      disabled={cloning === t.id || isDone || isOwn}
                       className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-medium transition-all
-                        ${isDone
+                        ${isOwn
+                          ? 'bg-cream text-muted border border-border cursor-default'
+                          : isDone
                           ? 'bg-green-50 text-green-700 border border-green-200 cursor-default'
                           : 'btn-primary disabled:opacity-60'}`}
                     >
-                      {isDone
+                      {isOwn
+                        ? <>✦ Sizin testiniz</>
+                        : isDone
                         ? <><CheckCircle2 size={12} /> Eklendi</>
                         : cloning === t.id
                         ? 'Klonlanıyor…'

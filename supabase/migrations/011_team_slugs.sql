@@ -16,8 +16,15 @@ update public.teams
 alter table public.teams
   alter column slug set not null;
 
-alter table public.teams
-  add constraint teams_slug_unique unique (slug);
+-- Güvenli Constraint Ekleme (Eğer önceden eklenmişse hata vermemesi için)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'teams_slug_unique'
+  ) THEN
+    ALTER TABLE public.teams ADD CONSTRAINT teams_slug_unique UNIQUE (slug);
+  END IF;
+END $$;
 
 -- 4. Slug ile arama için index
 create index if not exists idx_teams_slug on public.teams (slug);

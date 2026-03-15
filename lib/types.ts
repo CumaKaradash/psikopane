@@ -159,11 +159,14 @@ export type TeamMemberForBooking = {
   profile: PublicProfile
 }
 
+export type TeamMemberStatus = 'pending' | 'accepted' | 'rejected' | 'blocked'
+
 export type TeamMember = {
   id:              string
   team_id:         string
   psychologist_id: string
   role:            TeamRole
+  status:          TeamMemberStatus
   joined_at:       string
   // joined
   profile?: Pick<Profile, 'id' | 'full_name' | 'title' | 'slug' | 'avatar_url'>

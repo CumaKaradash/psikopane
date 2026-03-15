@@ -11,7 +11,9 @@ export default async function NetworkPage() {
   const [
     { data: sentConns },
     { data: receivedConns },
-    { data: teams },
+    { data: ownedTeams },
+    { data: memberTeams },
+    { data: teamInvitations },
   ] = await Promise.all([
     supabase
       .from('connections')
@@ -28,13 +30,43 @@ export default async function NetworkPage() {
       .select(`
         *,
         members:team_members(
-          id, psychologist_id, role, joined_at,
+          id, psychologist_id, role, status, joined_at,
           profile:profiles!psychologist_id(id, full_name, title, slug)
         )
       `)
       .eq('owner_id', user.id)
       .order('created_at', { ascending: false }),
+    supabase
+      .from('team_members')
+      .select(`
+        team:teams(
+          id, name, description, owner_id, created_at, slug,
+          members:team_members(
+            id, psychologist_id, role, joined_at,
+            profile:profiles!psychologist_id(id, full_name, title, slug)
+          )
+        )
+      `)
+      .eq('psychologist_id', user.id)
+      .neq('role', 'owner'),
+    supabase
+      .from('team_members')
+      .select(`
+        *, team:teams(id, name, slug, description),
+        profile:profiles!psychologist_id(id, full_name, title, slug)
+      `)
+      .eq('psychologist_id', user.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false }),
   ])
+
+  // Tekrar eden takımları birleştir (sahip + üye olunan)
+  const memberTeamList = (memberTeams ?? [])
+    .map((m: { team: unknown }) => m.team)
+    .filter(Boolean) as typeof ownedTeams
+  const teamIds = new Set((ownedTeams ?? []).map((t: { id: string }) => t.id))
+  const extraTeams = (memberTeamList ?? []).filter((t: { id: string }) => !teamIds.has(t.id))
+  const teams = [...(ownedTeams ?? []), ...extraTeams]
 
   // Bağlı meslektaşların paylaştığı test sayıları (istatistik)
   const acceptedIds = [
@@ -66,6 +98,7 @@ export default async function NetworkPage() {
         sentConnections={sentConns ?? []}
         receivedConnections={receivedConns ?? []}
         teams={teams ?? []}
+        teamInvitations={teamInvitations ?? []}
       />
     </>
   )
