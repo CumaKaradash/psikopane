@@ -80,7 +80,7 @@ export default async function BookingPage({ params: rawParams }: Props) {
   if (profile) {
     const ctx: BookingContext = {
       type:        'individual',
-      profile:     profile as PublicProfile,
+      profile:     profile as unknown as PublicProfile,
       team:        null,
       teamMembers: null,
     }
@@ -122,7 +122,7 @@ export default async function BookingPage({ params: rawParams }: Props) {
     .map(m => ({
       psychologist_id: m.psychologist_id,
       role:            m.role as 'owner' | 'member',
-      profile:         m.profile as PublicProfile,
+      profile:         (Array.isArray(m.profile) ? m.profile[0] : m.profile) as unknown as PublicProfile,
     }))
 
   const ctx: BookingContext = {
