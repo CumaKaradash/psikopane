@@ -95,7 +95,7 @@ export default function HomePage() {
         <section className="bg-gradient-to-b from-teal-50 to-slate-50 py-16 lg:py-24 px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center">
             <h1 className="text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight mb-6">
-              İçsel Yolculuğunuza Doğru İlk Adımı Atın
+              Yolculuğunuza Doğru İlk Adımı Atın
             </h1>
             <p className="text-lg text-slate-600 mb-10 max-w-2xl mx-auto">
               Alanında uzman psikologlar arasından ihtiyacınıza en uygun olanı bulun, 
