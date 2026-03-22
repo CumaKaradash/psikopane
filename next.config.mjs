@@ -1,12 +1,16 @@
 // next.config.mjs
 /** @type {import('next').NextConfig} */
+// SW versiyonu — her build'de otomatik güncellenir
+const BUILD_ID = Date.now().toString(36)
+
 const nextConfig = {
   images: {
     remotePatterns: [
+      // Yalnızca Supabase storage ve CDN kaynaklarına izin ver
+      // '**' wildcard'ı SSRF ve içerik enjeksiyonu riski oluşturduğu için kaldırıldı
       { protocol: 'https', hostname: '*.supabase.co' },
       { protocol: 'https', hostname: '*.supabase.in' },
       { protocol: 'https', hostname: 'cdnjs.cloudflare.com' },
-      { protocol: 'https', hostname: '**' },
     ],
   },
 
@@ -44,6 +48,7 @@ const nextConfig = {
           { key: 'Cache-Control',          value: 'no-cache, no-store, must-revalidate' },
           { key: 'Content-Type',           value: 'application/javascript; charset=utf-8' },
           { key: 'Service-Worker-Allowed', value: '/' },
+          { key: 'X-SW-Version',           value: BUILD_ID },
         ],
       },
     ]

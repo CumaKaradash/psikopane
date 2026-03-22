@@ -2,7 +2,7 @@
 
 Psikologlar için kapsamlı klinik yönetim ve ağ platformu.
 
-**Stack:** Next.js 16 · Supabase · Tailwind CSS · TypeScript · Vercel
+**Stack:** Next.js 15 · Supabase · Tailwind CSS · TypeScript · Zod · Vercel
 
 ---
 
@@ -33,12 +33,12 @@ Vercel → Project → Settings → **Environment Variables** altına ekle:
 | `NEXT_PUBLIC_APP_URL` | Uygulamanın URL'i | ✅ |
 | `RESEND_API_KEY` | E-posta bildirimleri | Önerilen |
 | `RESEND_FROM_EMAIL` | Gönderici e-posta | Önerilen |
+| `CRON_SECRET` | Cron güvenliği | Önerilen |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Push bildirimleri | Opsiyonel |
 | `VAPID_PRIVATE_KEY` | Push bildirimleri | Opsiyonel |
 | `VAPID_SUBJECT` | Push bildirimleri | Opsiyonel |
 | `UPSTASH_REDIS_REST_URL` | Rate limiting | Opsiyonel |
 | `UPSTASH_REDIS_REST_TOKEN` | Rate limiting | Opsiyonel |
-| `CRON_SECRET` | Cron güvenliği | Önerilen |
 
 > VAPID anahtarı üretmek için: `npx web-push generate-vapid-keys`
 
@@ -53,6 +53,10 @@ supabase/migrations/008_appointments_push.sql
 supabase/migrations/009_teams_and_network.sql
 supabase/migrations/010_public_tests.sql
 supabase/migrations/011_team_slugs.sql
+supabase/migrations/016_clients_birth_date_address.sql
+supabase/migrations/017_finance_amount_numeric.sql
+supabase/migrations/018_session_notes.sql
+supabase/migrations/019_test_score_ranges.sql
 ```
 
 > **Not:** 002–006 dosyaları eski geliştirme aşamalarına aittir, 007 onları kapsar.
@@ -84,25 +88,39 @@ npm run dev
 | URL | Açıklama | Auth |
 |---|---|---|
 | `/` | Giriş sayfasına yönlendirir | — |
-| `/auth/login` | Psikolog girişi | — |
-| `/auth/register` | Yeni hesap oluştur | — |
+| `/auth` | Psikolog girişi / kayıt | — |
 | `/auth/setup` | Profil kurulumu | ✅ |
 | `/panel` | Dashboard | ✅ |
-| `/panel/calendar` | Takvim | ✅ |
+| `/panel/calendar` | Takvim + Seans notları | ✅ |
 | `/panel/clients` | Danışanlar | ✅ |
-| `/panel/tests` | Test yönetimi | ✅ |
+| `/panel/tests` | Test yönetimi + Skor aralıkları | ✅ |
 | `/panel/homework` | Ödev yönetimi | ✅ |
-| `/panel/finance` | Muhasebe | ✅ |
+| `/panel/finance` | Muhasebe + Grafik + CSV | ✅ |
 | `/panel/archive` | Arşiv | ✅ |
-| `/panel/links` | Link paylaş | ✅ |
+| `/panel/links` | Link paylaş + QR kod | ✅ |
 | `/panel/network` | Meslektaş ağı | ✅ |
 | `/panel/community` | Topluluk testleri | ✅ |
 | `/panel/news` | Psikoloji bülteni | ✅ |
-| `/panel/settings` | Profil ayarları | ✅ |
+| `/panel/settings` | Profil ayarları + Fotoğraf yükleme | ✅ |
 | `/{slug}` | Psikolog/klinik vitrin sayfası | — |
 | `/{slug}/booking` | Randevu formu | — |
 | `/{slug}/test/{id}` | Test formu | — |
 | `/{slug}/odev/{id}` | Ödev formu | — |
+
+---
+
+## ✨ Özellikler
+
+- **Randevu Yönetimi** — Takvim görünümü, çakışma kontrolü, otomatik e-posta + .ics takvim daveti
+- **Seans Notları** — Randevulara bağlı klinik notlar, danışana görünmez
+- **Danışan Yönetimi** — Doğum tarihi, adres, seans geçmişi
+- **Test & Ödev** — Sürükle-bırak soru oluşturucu, skor aralığı yorumlama, CSV dışa aktarma
+- **Muhasebe** — Aylık gelir/gider, otomatik seans geliri, Recharts grafiği, CSV dışa aktarma
+- **QR Kod** — Her randevu/test/ödev linki için QR oluşturma ve PNG indirme
+- **Meslektaş Ağı** — Bağlantı istekleri, klinik takımları
+- **Push Bildirimleri** — Web push + e-posta hatırlatmaları (cron ile)
+- **Topluluk** — Kamuya açık test kütüphanesi, klonlama
+- **Güvenlik** — RLS, Zod doğrulaması, rate limiting, servis rolü ayrımı
 
 ---
 
@@ -123,4 +141,4 @@ Yaklaşan randevuları bulur → Resend ile e-posta + Web Push bildirimi gönder
 
 `profiles` · `clients` · `appointments` · `tests` · `test_responses`  
 `homework` · `homework_responses` · `finance_entries` · `files`  
-`teams` · `team_members` · `connections`
+`teams` · `team_members` · `connections` · `rss_feeds` · `session_notes`

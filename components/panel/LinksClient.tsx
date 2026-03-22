@@ -12,9 +12,43 @@ interface Props {
 }
 
 // Bileşen dışında tanımla — React anti-pattern'i önler
+import { useState, useEffect, useRef } from 'react'
+
 function LinkCard({ icon, title, url, type, onCopy }: {
   icon: string; title: string; url: string; type: 'test' | 'odev'; onCopy: (url: string) => void
 }) {
+  const [showQR, setShowQR] = useState(false)
+  const qrRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showQR || !qrRef.current) return
+    qrRef.current.innerHTML = ''
+    // QRCode.js CDN'den yüklü değilse yükle
+    const load = () => {
+      if ((window as any).QRCode) {
+        new (window as any).QRCode(qrRef.current, {
+          text: url, width: 160, height: 160,
+          colorDark: '#2c2c2c', colorLight: '#faf8f4',
+          correctLevel: (window as any).QRCode.CorrectLevel.M,
+        })
+      }
+    }
+    if ((window as any).QRCode) { load(); return }
+    const s = document.createElement('script')
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'
+    s.onload = load
+    document.head.appendChild(s)
+  }, [showQR, url])
+
+  function downloadQR() {
+    const canvas = qrRef.current?.querySelector('canvas')
+    if (!canvas) return
+    const a = document.createElement('a')
+    a.href = canvas.toDataURL('image/png')
+    a.download = `${title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-qr.png`
+    a.click()
+  }
+
   return (
     <div className="card p-5 flex items-start gap-4">
       <div className="text-2xl flex-shrink-0 mt-0.5">{icon}</div>
@@ -26,14 +60,25 @@ function LinkCard({ icon, title, url, type, onCopy }: {
         <div className="bg-cream rounded-lg px-3 py-1.5 font-mono text-xs text-sage mt-2 truncate">
           {url.replace(/^https?:\/\/[^/]+\//, '')}
         </div>
-        <div className="flex gap-2 mt-3">
+        <div className="flex gap-2 mt-3 flex-wrap">
           <button onClick={() => onCopy(url)} className="btn-primary py-1.5 px-3 text-xs">
             📋 Linki Kopyala
           </button>
           <a href={url} target="_blank" rel="noopener noreferrer" className="btn-outline py-1.5 px-3 text-xs">
             👁 Önizle
           </a>
+          <button onClick={() => setShowQR(q => !q)} className="btn-outline py-1.5 px-3 text-xs">
+            ◈ QR Kod
+          </button>
         </div>
+        {showQR && (
+          <div className="mt-4 flex flex-col items-start gap-3">
+            <div ref={qrRef} className="rounded-lg overflow-hidden border border-border" />
+            <button onClick={downloadQR} className="btn-outline py-1.5 px-3 text-xs flex items-center gap-1.5">
+              ⬇ QR İndir (PNG)
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -91,9 +136,11 @@ export default function LinksClient({ tests, homework, profileSlug }: Props) {
         <h3 className="text-xs font-bold text-sage uppercase tracking-wider mb-2">Randevu Linki</h3>
         <p className="text-sm text-charcoal font-mono mb-1">{origin}/{profileSlug}/booking</p>
         <p className="text-xs text-muted mb-3">Herkese açık — üye olmadan randevu alabilirler</p>
-        <button onClick={() => copy(`${origin}/${profileSlug}/booking`)} className="btn-primary">
-          📋 Linki Kopyala
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => copy(`${origin}/${profileSlug}/booking`)} className="btn-primary">
+            📋 Linki Kopyala
+          </button>
+        </div>
       </div>
     </div>
   )

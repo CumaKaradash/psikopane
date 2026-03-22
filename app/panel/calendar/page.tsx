@@ -16,17 +16,21 @@ interface NormalizedAppt {
   guest_email?: string | null
   guest_note?: string | null
   notes?: string | null
-  client?: { full_name: string } | null
+  client?: { id?: string; full_name: string; phone?: string; email?: string } | null
+  client_id?: string | null
 }
 
 function normalizeAppts(data: unknown[] | null): NormalizedAppt[] {
   return (data ?? []).map((a: unknown) => {
     const appt = a as Record<string, unknown>
+    const clientData = Array.isArray(appt.client)
+      ? (appt.client[0] as { id?: string; full_name: string; phone?: string; email?: string } | undefined) ?? null
+      : (appt.client as { id?: string; full_name: string; phone?: string; email?: string } | null) ?? null
+    
     return {
       ...appt,
-      client: Array.isArray(appt.client)
-        ? (appt.client[0] as { full_name: string } | undefined) ?? null
-        : (appt.client as { full_name: string } | null) ?? null,
+      client: clientData,
+      client_id: appt.client_id as string | null,
     } as NormalizedAppt
   })
 }
@@ -124,6 +128,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         pendingAppts={normalizeAppts(pendingAppts as unknown[])}
         viewDate={{ year, month }}
         today={todayStr}
+        userId={user.id}
       />
     </>
   )

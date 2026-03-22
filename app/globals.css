@@ -49,12 +49,12 @@
   .pill-orange { @apply inline-flex px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-orange-50 text-orange-800; }
   .pill-blue   { @apply inline-flex px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-800; }
   .pill-sage   { @apply inline-flex px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-sage-pale text-sage; }
-}
 
   /* Küçük buton yardımcı sınıfı */
   .btn-sm {
     @apply py-1 px-2.5 text-xs;
   }
+}
 
 /* ── Mobil animasyon (Sidebar drawer) ─────────────────── */
 @keyframes slideInFromLeft {

@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { tr } from 'date-fns/locale'
 import toast from 'react-hot-toast'
+import { localDateKey } from '@/lib/utils'
 import { Check, X, Clock, CheckCircle2, Calendar, Plus, ChevronRight } from 'lucide-react'
 
 interface Appt {
@@ -68,7 +69,7 @@ export default function TeamCalendar({ teamId }: Props) {
         setToday(todayStr)
         
         const today = data.filter((a: Appt) => 
-          a.starts_at.startsWith(todayStr)
+          localDateKey(a.starts_at) === todayStr
         ) || []
         setTodayAppts(today)
         
@@ -94,7 +95,7 @@ export default function TeamCalendar({ teamId }: Props) {
 
   function getAppointmentsForDay(day: number) {
     const dateStr = `${viewDate.year}-${String(viewDate.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    return appointments.filter(a => a.starts_at.startsWith(dateStr))
+    return appointments.filter(a => localDateKey(a.starts_at) === dateStr)
   }
 
   function changeMonth(direction: number) {

@@ -1,11 +1,18 @@
 'use client'
 // components/panel/CalendarClient.tsx
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { tr } from 'date-fns/locale'
 import toast from 'react-hot-toast'
-import { Check, X, Clock, CheckCircle2, Calendar, Plus, ChevronRight } from 'lucide-react'
+import { localDateKey } from '@/lib/utils'
+import { Check, X, Clock, CheckCircle2, Calendar, Plus, ChevronRight, UserPlus } from 'lucide-react'
+
+// ── Demo Paywall entegrasyonu ─────────────────────────────────────────────────
+import { useDemoUser }  from '@/hooks/useDemoUser'
+import DemoPaywallModal from '@/components/panel/DemoPaywallModal'
+// ─────────────────────────────────────────────────────────────────────────────
+import { createClient } from '@/lib/supabase/client'
 
 interface Appt {
   id: string
@@ -18,71 +25,164 @@ interface Appt {
   guest_email?: string | null
   guest_note?: string | null
   notes?: string | null
-  client?: { full_name: string } | null
+  client?: { id?: string; full_name: string; phone?: string; email?: string } | null
+  client_id?: string | null
 }
 
 interface Props {
   appointments: Appt[]
-  todayAppts: Appt[]
+  todayAppts:   Appt[]
   pendingAppts: Appt[]
   viewDate: { year: number; month: number }
   today: string
+  userId: string   // Realtime filtresi için
 }
 
 const STATUS_CFG: Record<string, { text: string; cls: string; dot: string }> = {
-  pending:   { text: 'Bekliyor',    cls: 'pill-orange', dot: 'bg-orange-400' },
-  confirmed: { text: 'Onaylı',      cls: 'pill-green',  dot: 'bg-green-500'  },
-  completed: { text: 'Tamamlandı',  cls: 'pill-sage',   dot: 'bg-sage'       },
-  cancelled: { text: 'İptal',       cls: 'pill-orange', dot: 'bg-gray-400'   },
+  pending:   { text: 'Bekliyor',   cls: 'pill-orange', dot: 'bg-orange-400' },
+  confirmed: { text: 'Onaylı',     cls: 'pill-green',  dot: 'bg-green-500'  },
+  completed: { text: 'Tamamlandı', cls: 'pill-sage',   dot: 'bg-sage'       },
+  cancelled: { text: 'İptal',      cls: 'pill-orange', dot: 'bg-gray-400'   },
 }
 
 const DAY_NAMES = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz']
 
-export default function CalendarClient({ appointments, todayAppts, pendingAppts, viewDate, today }: Props) {
-  const [addOpen, setAddOpen]     = useState(false)
-  const [detailAppt, setDetailAppt] = useState<Appt | null>(null)
-  const [form, setForm]           = useState({ guest_name: '', session_type: 'Bireysel Terapi', starts_at: '', duration_min: '50', notes: '' })
-  const [loading, setLoading]     = useState(false)
-  const [localToday, setLocalToday]     = useState(todayAppts)
-  const [localPending, setLocalPending] = useState(pendingAppts)
-  const [localAll, setLocalAll]         = useState(appointments)
-  const [mobileTab, setMobileTab] = useState<'calendar' | 'today' | 'pending'>('calendar')
+export default function CalendarClient({ appointments, todayAppts, pendingAppts, viewDate, today, userId }: Props) {
+  const [addOpen,       setAddOpen]     = useState(false)
+  const [detailAppt,    setDetailAppt]  = useState<Appt | null>(null)
+  const [form,          setForm]        = useState({ guest_name: '', session_type: 'Bireysel Terapi', starts_at: '', duration_min: '50', notes: '' })
+  const [loading,       setLoading]     = useState(false)
+  const [localToday,    setLocalToday]  = useState(todayAppts)
+  const [localPending,  setLocalPending] = useState(pendingAppts)
+  const [localAll,      setLocalAll]    = useState(appointments)
+  const [mobileTab,     setMobileTab]   = useState<'calendar' | 'today' | 'pending'>('calendar')
+  const [completionPrice, setCompletionPrice] = useState<string>('')
+  const [sessionNote,     setSessionNote]     = useState<string>('')
+  const [noteSaving,      setNoteSaving]      = useState(false)
+  const [noteLoaded,      setNoteLoaded]      = useState<string | null>(null)
+
+  // ── Demo Paywall state ──────────────────────────────────────────────────────
+  const { isDemoUser }              = useDemoUser()
+  const [paywallOpen, setPaywallOpen] = useState(false)
+
+  function guardDemo(): boolean {
+    if (isDemoUser) { setPaywallOpen(true); return true }
+    return false
+  }
+  // ───────────────────────────────────────────────────────────────────────────
+
+  // ── Supabase Realtime: randevu değişikliklerini canlı dinle ──────────────
+  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null)
+
+  useEffect(() => {
+    const supabase = createClient()
+    const ch = supabase
+      .channel(`appointments-realtime-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'appointments', filter: `psychologist_id=eq.${userId}` },
+        (payload) => {
+          const appt = payload.new as Appt | undefined
+          const oldAppt = payload.old as Appt | undefined
+
+          if (payload.eventType === 'INSERT' && appt) {
+            setLocalAll(prev => [...prev, appt])
+            if (appt.status === 'pending') setLocalPending(prev => [...prev, appt])
+            const todayStr = localDateKey(new Date().toISOString())
+            if (appt.starts_at && localDateKey(appt.starts_at) === todayStr) setLocalToday(prev => [...prev, appt])
+            toast('Yeni randevu talebi geldi', { icon: '🗓️' })
+          }
+
+          if (payload.eventType === 'UPDATE' && appt) {
+            const update = (list: Appt[]) => list.map(a => a.id === appt.id ? { ...a, ...appt } : a)
+            setLocalAll(update)
+            setLocalToday(update)
+            setLocalPending(prev => {
+              const updated = update(prev)
+              // Eğer status artık pending değilse listeden çıkar
+              if (appt.status !== 'pending') return updated.filter(a => a.id !== appt.id)
+              return updated
+            })
+          }
+
+          if (payload.eventType === 'DELETE' && oldAppt) {
+            const remove = (list: Appt[]) => list.filter(a => a.id !== oldAppt.id)
+            setLocalAll(remove)
+            setLocalToday(remove)
+            setLocalPending(remove)
+          }
+        }
+      )
+      .subscribe()
+
+    channelRef.current = ch
+    return () => { supabase.removeChannel(ch) }
+  }, [])
+
+  // ── Seans notu yükle (randevu detayı açılınca) ───────────────────────────
+  useEffect(() => {
+    if (!detailAppt) { setSessionNote(''); setNoteLoaded(null); return }
+    fetch(`/api/session-notes?appointment_id=${detailAppt.id}`)
+      .then(r => r.ok ? r.json() : { content: '' })
+      .then(d => { setSessionNote(d.content ?? ''); setNoteLoaded(detailAppt.id) })
+      .catch(() => {})
+  }, [detailAppt?.id])
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async function saveSessionNote() {
+    if (!detailAppt) return
+    setNoteSaving(true)
+    try {
+      const res = await fetch('/api/session-notes', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointment_id: detailAppt.id, content: sessionNote }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+      toast.success('Not kaydedildi')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Kayıt başarısız')
+    } finally {
+      setNoteSaving(false)
+    }
+  }
 
   const { year, month } = viewDate
   const firstDay    = new Date(year, month - 1, 1)
   const offset      = (firstDay.getDay() + 6) % 7
   const daysInMonth = new Date(year, month, 0).getDate()
 
-  // Sadece confirmed+completed randevuları takvimde göster
   const byDay: Record<string, Appt[]> = {}
   for (const a of localAll) {
     if (a.status === 'cancelled') continue
-    const key = a.starts_at.slice(0, 10)
+    const key = localDateKey(a.starts_at)
     if (!byDay[key]) byDay[key] = []
     byDay[key].push(a)
   }
 
   function getName(a: Appt) { return a.client?.full_name ?? a.guest_name ?? '—' }
 
-  // ── Randevu durumunu güncelle ────────────────────────────────────────────
-  async function updateStatus(id: string, status: string) {
+  // ── Randevu durumunu güncelle ─────────────────────────────────────────────
+  async function updateStatus(id: string, status: string, price?: number) {
+    if (guardDemo()) return  // 🔒 Demo engeli
+
+    const body: Record<string, unknown> = { id, status }
+    if (price !== undefined && price > 0) body.price = price
+
     const res = await fetch('/api/appointments', {
-      method: 'PATCH',
+      method:  'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status }),
+      body:    JSON.stringify(body),
     })
     if (!res.ok) { toast.error('Güncelleme başarısız'); return }
-    const updated: Appt = await res.json()
 
-    // Tüm listeleri güncelle
     const updateList = (list: Appt[]) => list.map(a => a.id === id ? { ...a, status } : a)
     setLocalAll(updateList)
     setLocalToday(prev => {
       const updated2 = updateList(prev)
-      // Confirmed oldu → today listesine ekle (eğer bugünse)
       if (status === 'confirmed') {
         const appt = localPending.find(a => a.id === id)
-        if (appt && appt.starts_at.slice(0, 10) === today && !prev.find(a => a.id === id)) {
+        if (appt && localDateKey(appt.starts_at) === today && !prev.find(a => a.id === id)) {
           return [...prev, { ...appt, status }].sort((a, b) => a.starts_at.localeCompare(b.starts_at))
         }
       }
@@ -92,41 +192,99 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
       if (status === 'confirmed' || status === 'cancelled') return prev.filter(a => a.id !== id)
       return updateList(prev)
     })
-
     if (detailAppt?.id === id) setDetailAppt(d => d ? { ...d, status } : d)
 
     const labels: Record<string, string> = { confirmed: 'Randevu onaylandı ✓', cancelled: 'Randevu iptal edildi', completed: 'Tamamlandı ✓' }
     toast.success(labels[status] ?? 'Güncellendi')
   }
 
-  // ── Panelden randevu ekle ────────────────────────────────────────────────
+  // ── Randevu ekle ──────────────────────────────────────────────────────────
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
+    if (guardDemo()) return  // 🔒 Demo engeli
+
     if (!form.guest_name || !form.starts_at) { toast.error('İsim ve saat zorunlu'); return }
     setLoading(true)
     try {
       const res = await fetch('/api/appointments', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          guest_name: form.guest_name, guest_phone: null,
+          guest_name:   form.guest_name, guest_phone: null,
           session_type: form.session_type,
-          starts_at: new Date(form.starts_at).toISOString(),
+          starts_at:    new Date(form.starts_at).toISOString(),
           duration_min: parseInt(form.duration_min),
-          notes: form.notes || null,
-          _panel_add: true,
+          notes:        form.notes || null,
+          _panel_add:   true,
         }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
       const newAppt: Appt = await res.json()
       setLocalAll(a => [newAppt, ...a])
-      if (newAppt.starts_at.slice(0, 10) === today) setLocalToday(a => [...a, newAppt].sort((a, b) => a.starts_at.localeCompare(b.starts_at)))
+      if (localDateKey(newAppt.starts_at) === today)
+        setLocalToday(a => [...a, newAppt].sort((a, b) => a.starts_at.localeCompare(b.starts_at)))
       setAddOpen(false)
       setForm({ guest_name: '', session_type: 'Bireysel Terapi', starts_at: '', duration_min: '50', notes: '' })
       toast.success('Randevu eklendi!')
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Hata oluştu')
     } finally { setLoading(false) }
+  }
+
+  // ── Danışan olarak kaydet ─────────────────────────────────────────────────────
+  async function saveAsClient(appointment: Appt) {
+    if (guardDemo()) return  // 🔒 Demo engeli
+
+    if (!appointment.guest_name) { toast.error('Danışan adı bulunamadı'); return }
+    setLoading(true)
+    try {
+      // Önce danışanı oluştur
+      const clientRes = await fetch('/api/clients', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name:    appointment.guest_name,
+          phone:        appointment.guest_phone || '',
+          email:        appointment.guest_email || '',
+          session_type: appointment.session_type,
+          notes:        appointment.guest_note || '',
+        }),
+      })
+      if (!clientRes.ok) throw new Error((await clientRes.json()).error)
+      const client = await clientRes.json()
+
+      // Sonra randevuyu güncelle ve client_id'yi bağla
+      const apptRes = await fetch('/api/appointments', {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id:        appointment.id,
+          client_id: client.id,
+        }),
+      })
+      if (!apptRes.ok) throw new Error((await apptRes.json()).error)
+      const updatedAppt = await apptRes.json()
+
+      // State'i güncelle
+      const clientInfo = { id: client.id, full_name: client.full_name, phone: client.phone, email: client.email }
+      setLocalAll(prev => prev.map(a => a.id === appointment.id ? { ...a, client_id: client.id, client: clientInfo } : a))
+      setLocalToday(prev => prev.map(a => a.id === appointment.id ? { ...a, client_id: client.id, client: clientInfo } : a))
+      setLocalPending(prev => prev.map(a => a.id === appointment.id ? { ...a, client_id: client.id, client: clientInfo } : a))
+      
+      if (detailAppt?.id === appointment.id) {
+        setDetailAppt({ ...detailAppt, client_id: client.id, client: clientInfo })
+      }
+
+      toast.success('Danışan olarak kaydedildi!')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Hata oluştu')
+    } finally { setLoading(false) }
+  }
+
+  // ── "Randevu Ekle" butonuna tıklanınca ────────────────────────────────────
+  function handleOpenAddModal() {
+    if (guardDemo()) return  // 🔒 Demo engeli
+    setAddOpen(true)
   }
 
   const cells: { day: number | null; dateKey: string }[] = []
@@ -136,15 +294,19 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
     cells.push({ day: d, dateKey })
   }
 
-  // ── Bugün paneli ────────────────────────────────────────────────────────
+  // ── Bugün paneli ──────────────────────────────────────────────────────────
   const TodayPanel = () => (
     <div className="card">
       <div className="px-4 py-3 border-b border-border flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold flex items-center gap-1.5"><Calendar size={14} className="text-sage" /> Bugün</h3>
+          <h3 className="text-sm font-semibold flex items-center gap-1.5">
+            <Calendar size={14} className="text-sage" /> Bugün
+          </h3>
           <p className="text-xs text-muted">{format(new Date(today + 'T12:00:00'), 'd MMMM', { locale: tr })}</p>
         </div>
-        <span className="text-xs bg-sage text-white rounded-full px-2 py-0.5 font-semibold">{localToday.filter(a => a.status !== 'cancelled').length}</span>
+        <span className="text-xs bg-sage text-white rounded-full px-2 py-0.5 font-semibold">
+          {localToday.filter(a => a.status !== 'cancelled').length}
+        </span>
       </div>
       {localToday.filter(a => a.status !== 'cancelled').length === 0 ? (
         <p className="px-4 py-8 text-sm text-muted text-center">Bugün randevu yok</p>
@@ -177,7 +339,7 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
     </div>
   )
 
-  // ── Bekleyen onaylar paneli ────────────────────────────────────────────
+  // ── Bekleyen onaylar paneli ───────────────────────────────────────────────
   const PendingPanel = () => (
     <div className="card">
       <div className="px-4 py-3 border-b border-border flex items-center justify-between">
@@ -185,7 +347,9 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
           <Clock size={14} className="text-orange-500" /> Onay Bekleyen
         </h3>
         {localPending.length > 0 && (
-          <span className="text-xs bg-orange-400 text-white rounded-full px-2 py-0.5 font-semibold animate-pulse">{localPending.length}</span>
+          <span className="text-xs bg-orange-400 text-white rounded-full px-2 py-0.5 font-semibold animate-pulse">
+            {localPending.length}
+          </span>
         )}
       </div>
       {localPending.length === 0 ? (
@@ -223,12 +387,33 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
 
   return (
     <div className="p-3 md:p-6">
+
+      {/* ── Demo Paywall Modal ───────────────────────────────────────────────── */}
+      <DemoPaywallModal isOpen={paywallOpen} onClose={() => setPaywallOpen(false)} />
+
+      {/* ── Demo Banner ─────────────────────────────────────────────────────── */}
+      {isDemoUser && (
+        <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <span className="text-base leading-none mt-0.5">🔒</span>
+          <p className="text-sm text-amber-800">
+            <span className="font-semibold">Demo modundasınız.</span>{' '}
+            Randevu ekleyemez veya güncelleyemezsiniz.{' '}
+            <button
+              onClick={() => setPaywallOpen(true)}
+              className="font-semibold underline underline-offset-2 hover:no-underline"
+            >
+              Tam sürümü başlatın →
+            </button>
+          </p>
+        </div>
+      )}
+
       {/* Mobil tab */}
       <div className="flex md:hidden gap-1 mb-4 bg-cream rounded-xl p-1">
         {([
           { key: 'calendar', label: '📅 Takvim' },
-          { key: 'today',   label: `⏰ Bugün${localToday.filter(a=>a.status!=='cancelled').length > 0 ? ` (${localToday.filter(a=>a.status!=='cancelled').length})` : ''}` },
-          { key: 'pending', label: `🔔 Bekleyen${localPending.length > 0 ? ` (${localPending.length})` : ''}` },
+          { key: 'today',    label: `⏰ Bugün${localToday.filter(a => a.status !== 'cancelled').length > 0 ? ` (${localToday.filter(a => a.status !== 'cancelled').length})` : ''}` },
+          { key: 'pending',  label: `🔔 Bekleyen${localPending.length > 0 ? ` (${localPending.length})` : ''}` },
         ] as const).map(tab => (
           <button key={tab.key} onClick={() => setMobileTab(tab.key)}
             className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors
@@ -255,7 +440,7 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
                   )
                   const isToday  = cell.dateKey === today
                   const dayAppts = byDay[cell.dateKey] ?? []
-                  const hasPending = localPending.some(a => a.starts_at.slice(0, 10) === cell.dateKey)
+                  const hasPending = localPending.some(a => localDateKey(a.starts_at) === cell.dateKey)
                   return (
                     <div key={cell.dateKey}
                       className={`min-h-[56px] md:min-h-[80px] p-1 border-r border-b border-border/40 hover:bg-sage-pale/30 transition-colors relative
@@ -287,15 +472,17 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
 
         {/* Sağ panel */}
         <div className={`w-full md:w-72 flex-shrink-0 space-y-4 ${mobileTab === 'calendar' ? 'hidden md:flex md:flex-col' : 'flex flex-col'}`}>
-          <button onClick={() => setAddOpen(true)} className="btn-primary w-full justify-center flex items-center gap-1.5">
-            <Plus size={15} /> Randevu Ekle
+          <button
+            onClick={handleOpenAddModal}
+            className="btn-primary w-full justify-center flex items-center gap-1.5"
+          >
+            {isDemoUser
+              ? <><span className="text-xs">🔒</span> Randevu Ekle</>
+              : <><Plus size={15} /> Randevu Ekle</>
+            }
           </button>
-          {(mobileTab === 'pending' || mobileTab === 'calendar') && (
-            <div className={mobileTab === 'pending' ? '' : ''}>
-              <PendingPanel />
-            </div>
-          )}
-          {(mobileTab === 'today' || mobileTab === 'calendar') && <TodayPanel />}
+          {(mobileTab === 'pending' || mobileTab === 'calendar') && <PendingPanel />}
+          {(mobileTab === 'today'   || mobileTab === 'calendar') && <TodayPanel />}
         </div>
       </div>
 
@@ -320,10 +507,10 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
             </div>
             <div className="p-6 space-y-3">
               {[
-                { label: 'Seans', value: detailAppt.session_type },
-                { label: 'Telefon', value: detailAppt.guest_phone },
-                { label: 'E-posta', value: detailAppt.guest_email },
-                { label: 'Danışan Notu', value: detailAppt.guest_note },
+                { label: 'Seans',         value: detailAppt.session_type },
+                { label: 'Telefon',       value: detailAppt.client?.phone || detailAppt.guest_phone },
+                { label: 'E-posta',       value: detailAppt.client?.email || detailAppt.guest_email },
+                { label: 'Danışan Notu',  value: detailAppt.guest_note },
                 { label: 'Psikolog Notu', value: detailAppt.notes },
               ].filter(f => f.value).map(f => (
                 <div key={f.label}>
@@ -331,6 +518,32 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
                   <p className="text-sm text-charcoal">{f.value}</p>
                 </div>
               ))}
+              {/* ── Klinik Seans Notu ──────────────────────────────────────── */}
+              <div className="pt-3 border-t border-border">
+                <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-1.5">Klinik Seans Notu</p>
+                <textarea
+                  className="input resize-none text-sm"
+                  rows={4}
+                  placeholder="Bu seans için özel notlarınızı buraya girin. Danışana görünmez."
+                  value={sessionNote}
+                  onChange={e => setSessionNote(e.target.value)}
+                />
+                <button
+                  onClick={saveSessionNote}
+                  disabled={noteSaving || noteLoaded === null}
+                  className="mt-2 btn-outline text-xs py-1.5 px-3 flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {noteSaving ? 'Kaydediliyor…' : 'Notu Kaydet'}
+                </button>
+              </div>
+
+              {detailAppt.client && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-1">Danışan Bilgisi</p>
+                  <p className="text-sm font-medium text-green-800">{detailAppt.client.full_name}</p>
+                  <p className="text-xs text-green-600 mt-1">Danışanlar sayfasında kayıtlı</p>
+                </div>
+              )}
               {detailAppt.status === 'pending' && (
                 <div className="flex gap-3 pt-3 border-t border-border">
                   <button onClick={() => updateStatus(detailAppt.id, 'confirmed')}
@@ -340,8 +553,40 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
                 </div>
               )}
               {detailAppt.status === 'confirmed' && (
-                <button onClick={() => { updateStatus(detailAppt.id, 'completed'); setDetailAppt(null) }}
-                  className="btn-outline w-full justify-center flex items-center gap-1.5 mt-2"><CheckCircle2 size={14} /> Tamamlandı İşaretle</button>
+                <div className="space-y-2 mt-2 pt-3 border-t border-border">
+                  <label className="label">Seans Ücreti (opsiyonel)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      className="input flex-1"
+                      placeholder="₺ Tutar"
+                      min="0"
+                      step="0.01"
+                      value={completionPrice}
+                      onChange={e => setCompletionPrice(e.target.value)}
+                    />
+                    <button
+                      onClick={() => {
+                        const price = completionPrice ? parseFloat(completionPrice) : undefined
+                        updateStatus(detailAppt.id, 'completed', price)
+                        setCompletionPrice('')
+                        setDetailAppt(null)
+                      }}
+                      className="btn-outline flex items-center gap-1.5 whitespace-nowrap"
+                    >
+                      <CheckCircle2 size={14} /> Tamamlandı
+                    </button>
+                  </div>
+                  {completionPrice && parseFloat(completionPrice) > 0 && (
+                    <p className="text-xs text-muted">Finansa otomatik gelir kaydı eklenecek</p>
+                  )}
+                </div>
+              )}
+              {!detailAppt.client_id && detailAppt.guest_name && (
+                <button onClick={() => saveAsClient(detailAppt)} disabled={loading}
+                  className="btn-primary w-full justify-center flex items-center gap-1.5 mt-2 disabled:opacity-60">
+                  <UserPlus size={14} /> Danışan Olarak Kaydet
+                </button>
               )}
             </div>
           </div>

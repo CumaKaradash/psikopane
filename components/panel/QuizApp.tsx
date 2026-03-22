@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { Trash2, Plus, ChevronLeft, ChevronRight } from 'lucide-react'
+import type { ScoreRange } from '@/lib/types'
 
 interface Option {
   label: string
@@ -20,7 +21,8 @@ interface Question {
 interface Props {
   testId: string
   initialQuestions?: Question[]
-  onSave: (questions: Question[]) => void
+  initialScoreRanges?: ScoreRange[]
+  onSave: (questions: Question[], scoreRanges: ScoreRange[]) => void
   onClose: () => void
 }
 
@@ -44,11 +46,13 @@ const emptyNewQ = (): { text: string; type: QType; options: Option[] } => ({
   text: '', type: 'multiple_choice', options: defaultOptions('multiple_choice'),
 })
 
-export default function QuizApp({ initialQuestions = [], onSave, onClose }: Props) {
+export default function QuizApp({ initialQuestions = [], initialScoreRanges = [], onSave, onClose }: Props) {
   const [questions, setQuestions] = useState<Question[]>(
     initialQuestions.map(q => ({ ...q, options: (q.options ?? []) as Option[] }))
   )
-  const [editIndex, setEditIndex] = useState<number | null>(null)
+  const [editIndex,   setEditIndex]   = useState<number | null>(null)
+  const [scoreRanges, setScoreRanges] = useState<ScoreRange[]>(initialScoreRanges)
+  const [showRanges,  setShowRanges]  = useState(false)
   const [newQ,      setNewQ]      = useState(emptyNewQ())
   const [adding,    setAdding]    = useState(false)
 
@@ -101,7 +105,7 @@ export default function QuizApp({ initialQuestions = [], onSave, onClose }: Prop
     if (questions.length === 0) { toast.error('En az bir soru ekleyin'); return }
     const empty = questions.findIndex(q => !q.text.trim())
     if (empty !== -1) { toast.error(`${empty + 1}. sorunun metni boş`); return }
-    onSave(questions)
+    onSave(questions, scoreRanges)
     onClose()
     toast.success('Sorular kaydedildi!')
   }
@@ -118,6 +122,10 @@ export default function QuizApp({ initialQuestions = [], onSave, onClose }: Prop
             <p className="text-xs text-muted mt-0.5">{questions.length} soru eklendi</p>
           </div>
           <div className="flex items-center gap-3">
+            <button onClick={() => setShowRanges(r => !r)}
+              className={`btn-outline text-xs py-1.5 px-3 ${showRanges ? 'border-sage text-sage' : ''}`}>
+              {showRanges ? 'Sorulara Dön' : 'Skor Aralıkları'}
+            </button>
             <button onClick={saveQuestions} disabled={questions.length === 0}
               className="btn-primary disabled:opacity-60 text-sm py-2 px-4">
               Kaydet ({questions.length})
@@ -126,6 +134,43 @@ export default function QuizApp({ initialQuestions = [], onSave, onClose }: Prop
           </div>
         </div>
 
+        {showRanges ? (
+          <div className="flex-1 overflow-y-auto p-6">
+            <p className="text-sm text-muted mb-4">Test bitince toplam skoru bu aralıklara göre yorumla. Renk kodlu sonuç kartı danışana gösterilir.</p>
+            <div className="space-y-3">
+              {scoreRanges.map((range, i) => (
+                <div key={i} className="border border-border rounded-xl p-4 flex items-start gap-3">
+                  <div className="flex-1 grid grid-cols-2 gap-2">
+                    <div className="flex gap-1">
+                      <input className="input w-20 text-sm" type="number" placeholder="Min" value={range.min}
+                        onChange={e => setScoreRanges(r => r.map((x, j) => j===i ? {...x, min: Number(e.target.value)} : x))} />
+                      <span className="self-center text-muted">–</span>
+                      <input className="input w-20 text-sm" type="number" placeholder="Maks" value={range.max}
+                        onChange={e => setScoreRanges(r => r.map((x, j) => j===i ? {...x, max: Number(e.target.value)} : x))} />
+                    </div>
+                    <input className="input text-sm" placeholder="Etiket (ör: Hafif)" value={range.label}
+                      onChange={e => setScoreRanges(r => r.map((x, j) => j===i ? {...x, label: e.target.value} : x))} />
+                    <select className="input text-sm" value={range.color}
+                      onChange={e => setScoreRanges(r => r.map((x, j) => j===i ? {...x, color: e.target.value as ScoreRange['color']} : x))}>
+                      <option value="green">Yeşil</option>
+                      <option value="yellow">Sarı</option>
+                      <option value="orange">Turuncu</option>
+                      <option value="red">Kırmızı</option>
+                    </select>
+                    <input className="input text-sm" placeholder="Açıklama (opsiyonel)" value={range.description ?? ''}
+                      onChange={e => setScoreRanges(r => r.map((x, j) => j===i ? {...x, description: e.target.value||null} : x))} />
+                  </div>
+                  <button onClick={() => setScoreRanges(r => r.filter((_, j) => j !== i))}
+                    className="text-muted hover:text-red-500 transition-colors mt-1"><Trash2 size={15}/></button>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setScoreRanges(r => [...r, {min:0, max:0, label:'', color:'green', description:null}])}
+              className="btn-outline mt-4 flex items-center gap-1.5 text-sm">
+              <Plus size={14}/> Aralık Ekle
+            </button>
+          </div>
+        ) : (
         <div className="flex flex-1 min-h-0 overflow-hidden">
 
           {/* Soru listesi */}
@@ -325,6 +370,7 @@ export default function QuizApp({ initialQuestions = [], onSave, onClose }: Prop
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
   )

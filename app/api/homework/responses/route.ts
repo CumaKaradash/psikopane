@@ -1,10 +1,10 @@
 // app/api/homework/responses/route.ts — public endpoint, rate limited
 import { createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { checkRateLimit, homeworkResponseRateLimit, RATE_OPTS } from '@/lib/upstash-rate-limit'
+import { checkRateLimit, RATE_PRESETS } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
-  const rl = await checkRateLimit(req, homeworkResponseRateLimit, RATE_OPTS.homeworkResponse)
+  const rl = checkRateLimit(req, RATE_PRESETS.homeworkResponse)
   if (!rl.success) {
     return NextResponse.json({ error: rl.error }, { status: 429, headers: rl.headers })
   }

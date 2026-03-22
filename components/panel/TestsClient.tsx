@@ -1,15 +1,22 @@
 'use client'
-// components/panel/TestsClient.tsx — JSON export/import + is_public toggle + QuizApp
+// components/panel/TestsClient.tsx
 
+import { toSlug } from '@/lib/utils'
 import { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
-import { Download, Upload, Globe, Lock } from 'lucide-react'
+import { Download, Upload, Globe, Lock, Users } from 'lucide-react'
 import type { Test } from '@/lib/types'
 import QuizApp from '@/components/panel/QuizApp'
+
+// ── Demo Paywall entegrasyonu ─────────────────────────────────────────────────
+import { useDemoUser }  from '@/hooks/useDemoUser'
+import DemoPaywallModal from '@/components/panel/DemoPaywallModal'
+// ─────────────────────────────────────────────────────────────────────────────
 
 type TestWithCount = Test & {
   responses?: { count: number }[]
   is_public?: boolean
+  team_shared?: boolean
 }
 
 interface Props {
@@ -17,20 +24,24 @@ interface Props {
   profileSlug: string
 }
 
-function toSlug(text: string) {
-  return text.toLowerCase()
-    .replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ş/g,'s')
-    .replace(/ı/g,'i').replace(/ö/g,'o').replace(/ç/g,'c')
-    .replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'')
-}
 
 export default function TestsClient({ tests: initial, profileSlug }: Props) {
-  const [tests, setTests]     = useState(initial)
-  const [addOpen, setAddOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [form, setForm]       = useState({ title: '', slug: '', description: '', is_public: false })
+  const [tests,      setTests]      = useState(initial)
+  const [addOpen,    setAddOpen]    = useState(false)
+  const [loading,    setLoading]    = useState(false)
+  const [form,       setForm]       = useState({ title: '', slug: '', description: '', is_public: false })
   const [quizTestId, setQuizTestId] = useState<string | null>(null)
-  const importRef             = useRef<HTMLInputElement>(null)
+  const importRef                   = useRef<HTMLInputElement>(null)
+
+  // ── Demo Paywall state ──────────────────────────────────────────────────────
+  const { isDemoUser }                = useDemoUser()
+  const [paywallOpen, setPaywallOpen] = useState(false)
+
+  function guardDemo(): boolean {
+    if (isDemoUser) { setPaywallOpen(true); return true }
+    return false
+  }
+  // ───────────────────────────────────────────────────────────────────────────
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
 
@@ -39,7 +50,7 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
     toast.success('Link kopyalandı!')
   }
 
-  // ── JSON Dışa Aktar ───────────────────────────────────────────────────────
+  // ── JSON Dışa Aktar (salt-okunur — demo izinli) ───────────────────────────
   function exportTest(test: TestWithCount) {
     const payload = {
       title:       test.title,
@@ -51,15 +62,17 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a')
-    a.href     = url
-    a.download = `${test.slug}.json`
-    a.click()
+    a.href = url; a.download = `${test.slug}.json`; a.click()
     URL.revokeObjectURL(url)
     toast.success('Test JSON olarak indirildi')
   }
 
   // ── JSON İçe Aktar ────────────────────────────────────────────────────────
   function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    if (guardDemo()) {                              // 🔒 Demo engeli
+      if (importRef.current) importRef.current.value = ''
+      return
+    }
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
@@ -67,8 +80,7 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
       try {
         const json = JSON.parse(ev.target?.result as string)
         if (!json.title || !Array.isArray(json.questions)) {
-          toast.error('Geçersiz JSON formatı')
-          return
+          toast.error('Geçersiz JSON formatı'); return
         }
         const slug = `${toSlug(json.title)}-${Date.now().toString(36)}`
         setLoading(true)
@@ -76,11 +88,8 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            title:       json.title,
-            description: json.description || null,
-            questions:   json.questions,
-            slug,
-            is_public:   false,
+            title: json.title, description: json.description || null,
+            questions: json.questions, slug, is_public: false,
           }),
         })
         if (!res.ok) throw new Error((await res.json()).error)
@@ -99,9 +108,9 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
 
   // ── is_active toggle ──────────────────────────────────────────────────────
   async function toggleActive(id: string, current: boolean) {
+    if (guardDemo()) return  // 🔒
     const res = await fetch('/api/tests', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, is_active: !current }),
     })
     if (res.ok) {
@@ -112,9 +121,9 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
 
   // ── is_public toggle ──────────────────────────────────────────────────────
   async function togglePublic(id: string, current: boolean) {
+    if (guardDemo()) return  // 🔒
     const res = await fetch('/api/tests', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, is_public: !current }),
     })
     if (res.ok) {
@@ -123,59 +132,102 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
     } else toast.error('Güncelleme başarısız')
   }
 
+  // ── team_shared toggle ────────────────────────────────────────────────────
+  async function toggleTeamShared(id: string, current: boolean) {
+    if (guardDemo()) return  // 🔒
+    const res = await fetch('/api/tests', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, team_shared: !current }),
+    })
+    if (res.ok) {
+      setTests(ts => ts.map(t => t.id === id ? { ...t, team_shared: !current } : t))
+      toast.success(!current ? 'Takımla paylaşıldı' : 'Takım paylaşımı kaldırıldı')
+    } else toast.error('Güncelleme başarısız')
+  }
+
   // ── Sil ──────────────────────────────────────────────────────────────────
   async function deleteTest(id: string) {
+    if (guardDemo()) return  // 🔒
     if (!confirm('Bu testi silmek istediğinize emin misiniz?')) return
     const res = await fetch(`/api/tests?id=${id}`, { method: 'DELETE' })
     if (res.ok) { setTests(ts => ts.filter(t => t.id !== id)); toast.success('Silindi') }
     else toast.error('Silme başarısız')
   }
 
-  // ── Yeni test ekle ────────────────────────────────────────────────────────
+  // ── Yeni test ekle — ortak helper ────────────────────────────────────────
+  async function createTest(title: string, slug: string, description: string, questions: unknown[], is_public: boolean): Promise<TestWithCount | null> {
+    const res = await fetch('/api/tests', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, slug, description, questions, is_public }),
+    })
+    if (!res.ok) throw new Error((await res.json()).error)
+    return res.json()
+  }
+
+  // ── "Boş Oluştur" (form submit) ───────────────────────────────────────────
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
+    if (guardDemo()) return  // 🔒
     if (!form.title || !form.slug) { toast.error('Başlık ve URL zorunlu'); return }
     setLoading(true)
     try {
-      const res = await fetch('/api/tests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: form.title, slug: form.slug, description: form.description, questions: [], is_public: form.is_public }),
-      })
-      if (!res.ok) throw new Error((await res.json()).error)
-      const newTest: TestWithCount = await res.json()
+      const newTest = await createTest(form.title, form.slug, form.description, [], form.is_public)
+      if (!newTest) return
       setTests(t => [newTest, ...t])
       setAddOpen(false)
       setForm({ title: '', slug: '', description: '', is_public: false })
       toast.success('Test oluşturuldu! Şimdi soru ekleyebilirsiniz.')
-      // QuizApp'i otomatik aç
       setQuizTestId(newTest.id)
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Hata oluştu')
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
+  }
+
+  // ── "Yeni Test" butonuna tıklanınca ───────────────────────────────────────
+  function handleOpenAddModal() {
+    if (guardDemo()) return  // 🔒
+    setAddOpen(true)
   }
 
   return (
     <div className="p-4 md:p-6">
+
+      {/* ── Demo Paywall Modal ───────────────────────────────────────────────── */}
+      <DemoPaywallModal isOpen={paywallOpen} onClose={() => setPaywallOpen(false)} />
+
+      {/* ── Demo Banner ─────────────────────────────────────────────────────── */}
+      {isDemoUser && (
+        <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <span className="text-base leading-none mt-0.5">🔒</span>
+          <p className="text-sm text-amber-800">
+            <span className="font-semibold">Demo modundasınız.</span>{' '}
+            Yeni test oluşturamaz, içe aktaramaz veya silemezsiniz.{' '}
+            <button onClick={() => setPaywallOpen(true)}
+              className="font-semibold underline underline-offset-2 hover:no-underline">
+              Tam sürümü başlatın →
+            </button>
+          </p>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 mb-5 justify-end">
-        {/* Gizli import input */}
         <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
-        <button onClick={() => importRef.current?.click()}
-          className="btn-outline flex items-center gap-1.5 text-xs">
-          <Upload size={14} /> JSON ile İçe Aktar
+        <button
+          onClick={() => { if (guardDemo()) return; importRef.current?.click() }}
+          className="btn-outline flex items-center gap-1.5 text-xs"
+        >
+          {isDemoUser ? <><Lock size={12} /> JSON ile İçe Aktar</> : <><Upload size={14} /> JSON ile İçe Aktar</>}
         </button>
-        <button onClick={() => setAddOpen(true)} className="btn-primary">
-          + Yeni Test
+        <button onClick={handleOpenAddModal} className="btn-primary flex items-center gap-1.5">
+          {isDemoUser ? <><Lock size={13} /> Yeni Test</> : '+ Yeni Test'}
         </button>
       </div>
 
       {tests.length === 0 && (
         <div className="text-center py-16 text-muted text-sm">
           Henüz test yok.{' '}
-          <button onClick={() => setAddOpen(true)} className="text-sage hover:underline">İlk testi oluştur →</button>
+          <button onClick={handleOpenAddModal} className="text-sage hover:underline">İlk testi oluştur →</button>
         </div>
       )}
 
@@ -190,9 +242,7 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
                   <span className={t.is_active ? 'pill-green' : 'pill-orange'}>
                     {t.is_active ? 'Aktif' : 'Pasif'}
                   </span>
-                  {t.is_public && (
-                    <span title="Toplulukta paylaşılıyor" className="pill-blue">🌐</span>
-                  )}
+                  {t.is_public && <span title="Toplulukta paylaşılıyor" className="pill-blue">🌐</span>}
                 </div>
               </div>
               {t.description && <p className="text-xs text-muted mb-2 line-clamp-2">{t.description}</p>}
@@ -202,7 +252,7 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
               <p className="text-xs text-muted mb-3">{count} yanıt</p>
 
               <div className="flex flex-wrap items-center gap-1.5">
-                <button onClick={() => copyUrl(t.slug)}    className="btn-outline py-1 px-2 text-xs">📋</button>
+                <button onClick={() => copyUrl(t.slug)} className="btn-outline py-1 px-2 text-xs">📋</button>
                 <button onClick={() => exportTest(t)}
                   className="btn-outline py-1 px-2 text-xs flex items-center gap-1" title="JSON Dışa Aktar">
                   <Download size={11} />
@@ -211,17 +261,24 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
                   className="btn-primary py-1 px-2.5 text-xs flex items-center gap-1">
                   👁 Yanıtları Gör {count > 0 && <span className="bg-white/20 rounded-full px-1.5 py-0.5 text-[10px] font-bold">{count}</span>}
                 </a>
-                <button onClick={() => toggleActive(t.id, t.is_active)}
-                  className="btn-outline py-1 px-2 text-xs">
+                <button onClick={() => toggleActive(t.id, t.is_active)} className="btn-outline py-1 px-2 text-xs">
                   {t.is_active ? 'Pasifleştir' : 'Aktifleştir'}
                 </button>
                 <button
                   onClick={() => togglePublic(t.id, t.is_public ?? false)}
                   title={t.is_public ? 'Topluluktan kaldır' : 'Toplulukta paylaş'}
-                  className={`btn-outline py-1 px-2 text-xs flex items-center gap-1
-                    ${t.is_public ? 'border-blue-300 text-blue-600' : ''}`}>
+                  className={`btn-outline py-1 px-2 text-xs flex items-center gap-1 ${t.is_public ? 'border-blue-300 text-blue-600' : ''}`}
+                >
                   {t.is_public ? <Globe size={11} /> : <Lock size={11} />}
                   {t.is_public ? 'Herkese Açık' : 'Özel'}
+                </button>
+                <button
+                  onClick={() => toggleTeamShared(t.id, t.team_shared ?? false)}
+                  title={t.team_shared ? 'Takım paylaşımını kaldır' : 'Takımla paylaş'}
+                  className={`btn-outline py-1 px-2 text-xs flex items-center gap-1 ${t.team_shared ? 'border-sage text-sage bg-sage/5' : ''}`}
+                >
+                  <Users size={11} />
+                  {t.team_shared ? 'Takımda Açık' : 'Takıma Aç'}
                 </button>
                 <button onClick={() => deleteTest(t.id)}
                   className="ml-auto text-xs text-red-400 hover:text-red-600 transition-colors">Sil</button>
@@ -230,9 +287,9 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
           )
         })}
 
-        <button onClick={() => setAddOpen(true)}
+        <button onClick={handleOpenAddModal}
           className="border-2 border-dashed border-border rounded-xl p-5 flex flex-col items-center justify-center gap-2 text-muted hover:border-sage hover:text-sage transition-colors min-h-[160px]">
-          <span className="text-3xl">+</span>
+          {isDemoUser ? <Lock size={22} className="opacity-50" /> : <span className="text-3xl">+</span>}
           <span className="text-sm font-medium">Yeni Test</span>
         </button>
       </div>
@@ -271,7 +328,6 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
                   onChange={e => setForm(f => ({ ...f, is_public: e.target.checked }))} />
                 <span className="text-xs text-charcoal">Topluluk havuzunda herkese açık yap</span>
               </label>
-              {/* İki buton: sadece oluştur (JSON ile doldurulacak) ya da manuel soru oluşturucu */}
               <div className="border-t border-border pt-4 space-y-2">
                 <p className="text-xs text-muted font-medium">Soruları nasıl eklemek istersiniz?</p>
                 <div className="flex gap-3">
@@ -284,13 +340,8 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
                       if (!form.title || !form.slug) { toast.error('Başlık ve URL zorunlu'); return }
                       setLoading(true)
                       try {
-                        const res = await fetch('/api/tests', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ title: form.title, slug: form.slug, description: form.description, questions: [], is_public: form.is_public }),
-                        })
-                        if (!res.ok) throw new Error((await res.json()).error)
-                        const newTest: TestWithCount = await res.json()
+                        const newTest = await createTest(form.title, form.slug, form.description, [], form.is_public)
+                        if (!newTest) return
                         setTests(t => [newTest, ...t])
                         setAddOpen(false)
                         setForm({ title: '', slug: '', description: '', is_public: false })
@@ -314,30 +365,33 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
         </div>
       )}
 
-      {/* QuizApp — test oluşturulunca otomatik açılır */}
+      {/* QuizApp */}
       {quizTestId && (
         <QuizApp
           testId={quizTestId}
-          initialQuestions={[]}
-          onSave={async (questions) => {
-            // QuizApp zaten { label, score } formatında options üretiyor — doğrudan kullan
+          initialQuestions={(tests.find(t => t.id === quizTestId)?.questions ?? []) as any}
+          initialScoreRanges={tests.find(t => t.id === quizTestId)?.score_ranges ?? []}
+          onSave={async (questions, scoreRanges) => {
             type QAQuestion = { text: string; type: string; options: { label: string; score: number }[] }
-            const formatted = (questions as QAQuestion[]).map((q) => ({
-              text: q.text,
-              options: q.options && q.options.length > 0
-                ? q.options.map((o) => ({ label: o.label, score: Number(o.score ?? 0) }))
+            const formatted = (questions as QAQuestion[]).map(q => ({
+              text:    q.text,
+              options: q.options?.length > 0
+                ? q.options.map(o => ({ label: o.label, score: Number(o.score ?? 0) }))
                 : [],
             }))
             try {
               const res = await fetch('/api/tests', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: quizTestId, questions: formatted }),
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  id: quizTestId,
+                  questions: formatted,
+                  score_ranges: scoreRanges.length > 0 ? scoreRanges : null,
+                }),
               })
               if (!res.ok) throw new Error((await res.json()).error)
-              setTests(ts => ts.map(t =>
-                t.id === quizTestId ? { ...t, questions: formatted } : t
-              ))
+              setTests(ts => ts.map(t => t.id === quizTestId
+                ? { ...t, questions: formatted, score_ranges: scoreRanges.length > 0 ? scoreRanges : null }
+                : t))
               toast.success('Sorular kaydedildi! ✓')
             } catch (err: unknown) {
               toast.error(err instanceof Error ? err.message : 'Kayıt başarısız')

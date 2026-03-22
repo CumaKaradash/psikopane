@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { ArrowLeft, User, Calendar, MessageSquare, ClipboardList } from 'lucide-react'
+import ExportCsvButton from '@/components/panel/ExportCsvButton'
 
 interface Answer {
   question_index: number
@@ -81,6 +82,23 @@ export default async function HomeworkResponsesPage({
             </p>
           </div>
         </div>
+        {responses.length > 0 && (
+          <div className="ml-auto pr-2">
+            <ExportCsvButton
+              filename={`${homework.title.replace(/[^a-z0-9]/gi,'-')}-ödevler.csv`}
+              label="Yanıtları İndir"
+              data={responses}
+              columns={[
+                { header: 'Katılımcı', value: (r: any) => r.respondent_name ?? 'Anonim' },
+                { header: 'Tarih', value: (r: any) => new Date(r.completed_at).toLocaleString('tr-TR') },
+                ...homework.questions.map((q: any, qi: number) => ({
+                  header: `S${qi+1}: ${q.text.slice(0,40)}`,
+                  value: (r: any) => r.answers?.find((a: any) => a.question_index === qi)?.answer_text ?? ''
+                }))
+              ]}
+            />
+          </div>
+        )}
       </header>
 
       <div className="p-4 md:p-6 max-w-4xl mx-auto">

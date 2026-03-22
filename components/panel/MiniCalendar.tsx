@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import { format, startOfMonth, endOfMonth, getDay, getDaysInMonth, addMonths, subMonths } from 'date-fns'
+import { localDateKey } from '@/lib/utils'
 import { tr } from 'date-fns/locale'
 
 interface Appt {
@@ -35,7 +36,7 @@ export default function MiniCalendar({ appointments, today, onViewMonth, onDayCl
   // Group appointments by day
   const byDay: Record<string, number> = {}
   for (const a of appointments) {
-    const key = a.starts_at.slice(0, 10)
+    const key = localDateKey(a.starts_at)
     byDay[key] = (byDay[key] || 0) + 1
   }
 

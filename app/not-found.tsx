@@ -18,7 +18,7 @@ export default function GlobalNotFound() {
           <Link href="/" className="btn-primary justify-center py-3 flex items-center gap-2">
             <Home size={15} /> Ana Sayfa
           </Link>
-          <Link href="/auth/login" className="btn-outline justify-center py-3 flex items-center gap-2">
+          <Link href="/auth" className="btn-outline justify-center py-3 flex items-center gap-2">
             <ArrowLeft size={15} /> Giriş Yap
           </Link>
         </div>

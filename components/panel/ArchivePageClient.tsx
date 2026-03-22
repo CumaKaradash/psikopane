@@ -13,10 +13,16 @@ import {
   Loader2, CheckCircle2,
 } from 'lucide-react'
 
+// ── Demo Paywall entegrasyonu ─────────────────────────────────────────────────
+import { useDemoUser }  from '@/hooks/useDemoUser'
+import DemoPaywallModal from '@/components/panel/DemoPaywallModal'
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface DbFile {
   id: string; psychologist_id: string; file_name: string
   storage_path: string; file_type: string; file_size: number
   category: string; notes: string | null; created_at: string
+  team_shared?: boolean
 }
 interface UrlEntry { id: string; url: string; label: string; created_at: string }
 interface TestResp  { id: string; test_id: string; respondent_name: string | null; total_score: number | null; completed_at: string }
@@ -78,8 +84,19 @@ export default function ArchivePageClient({ userId, files: initialFiles, testRes
   const [deleting, setDeleting] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // ── Demo Paywall state ──────────────────────────────────────────────────────
+  const { isDemoUser }                = useDemoUser()
+  const [paywallOpen, setPaywallOpen] = useState(false)
+
+  function guardDemo(): boolean {
+    if (isDemoUser) { setPaywallOpen(true); return true }
+    return false
+  }
+  // ───────────────────────────────────────────────────────────────────────────
+
   // ── Dosya yükle ──────────────────────────────────────────────────────────
   const uploadFiles = useCallback(async (fileList: FileList | File[]) => {
+    if (isDemoUser) { setPaywallOpen(true); return }  // 🔒 Demo engeli
     const arr = Array.from(fileList)
     if (arr.some(f => f.size > 15 * 1024 * 1024)) { toast.error('Maks. dosya boyutu 15 MB'); return }
 
@@ -88,7 +105,13 @@ export default function ArchivePageClient({ userId, files: initialFiles, testRes
       const path   = `uploads/${userId}/${fileId}`
       setUploading(u => [...u, fileId])
       try {
-        const { error: storErr } = await supabase.storage.from('psychologist-documents').upload(path, file, { upsert: false })
+        let { error: storErr } = await supabase.storage.from('psychologist-documents').upload(path, file, { upsert: false })
+        // Bucket yoksa otomatik oluştur ve tekrar dene
+        if (storErr?.message?.toLowerCase().includes('bucket')) {
+          await fetch('/api/setup/storage', { method: 'POST' })
+          const retry = await supabase.storage.from('psychologist-documents').upload(path, file, { upsert: false })
+          storErr = retry.error
+        }
         if (storErr) throw storErr
 
         const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
@@ -117,6 +140,7 @@ export default function ArchivePageClient({ userId, files: initialFiles, testRes
 
   // ── Dosya sil ────────────────────────────────────────────────────────────
   async function deleteFile(f: DbFile) {
+    if (guardDemo()) return  // 🔒
     if (!confirm(`"${f.file_name}" silinecek. Emin misiniz?`)) return
     setDeleting(f.id)
     try {
@@ -128,6 +152,23 @@ export default function ArchivePageClient({ userId, files: initialFiles, testRes
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Silinemedi')
     } finally { setDeleting(null) }
+  }
+
+  // ── Takıma Aç / Kapat ────────────────────────────────────────────────────
+  async function toggleTeamShared(f: DbFile) {
+    if (guardDemo()) return  // 🔒
+    const newVal = !(f.team_shared ?? false)
+    try {
+      const { error } = await supabase.from('files')
+        .update({ team_shared: newVal })
+        .eq('id', f.id)
+        .eq('psychologist_id', userId)
+      if (error) throw error
+      setFiles(fs => fs.map(x => x.id === f.id ? { ...x, team_shared: newVal } : x))
+      toast.success(newVal ? 'Takımla paylaşıldı' : 'Takım paylaşımı kaldırıldı')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Güncelleme başarısız')
+    }
   }
 
   // ── Dosya indir / önizle ─────────────────────────────────────────────────
@@ -147,6 +188,7 @@ export default function ArchivePageClient({ userId, files: initialFiles, testRes
 
   // ── URL ekle ─────────────────────────────────────────────────────────────
   async function addUrl() {
+    if (guardDemo()) return  // 🔒
     const url = newUrl.trim()
     if (!url) { toast.error('URL zorunlu'); return }
     if (!/^https?:\/\//.test(url)) { toast.error('URL http:// veya https:// ile başlamalı'); return }
@@ -172,6 +214,7 @@ export default function ArchivePageClient({ userId, files: initialFiles, testRes
   }
 
   async function deleteUrl(id: string) {
+    if (guardDemo()) return  // 🔒
     if (!confirm('Bu URL silinecek. Emin misiniz?')) return
     await supabase.from('files').delete().eq('id', id)
     setUrls(us => us.filter(u => u.id !== id))
@@ -188,6 +231,24 @@ export default function ArchivePageClient({ userId, files: initialFiles, testRes
 
   return (
     <div className="p-4 md:p-6 space-y-5">
+
+      {/* ── Demo Paywall Modal ─────────────────────────────────────────────── */}
+      <DemoPaywallModal isOpen={paywallOpen} onClose={() => setPaywallOpen(false)} />
+
+      {/* ── Demo Banner ───────────────────────────────────────────────────── */}
+      {isDemoUser && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <span className="text-base leading-none mt-0.5">🔒</span>
+          <p className="text-sm text-amber-800">
+            <span className="font-semibold">Demo modundasınız.</span>{' '}
+            Sisteme yeni dosya yükleyemez veya silemezsiniz.{' '}
+            <button onClick={() => setPaywallOpen(true)}
+              className="font-semibold underline underline-offset-2 hover:no-underline">
+              Tam sürümü başlatın →
+            </button>
+          </p>
+        </div>
+      )}
 
       {/* Arama */}
       <div className="relative max-w-sm">
@@ -262,6 +323,13 @@ export default function ArchivePageClient({ userId, files: initialFiles, testRes
                         <button onClick={() => downloadFile(f)} title="İndir"
                           className="p-1.5 rounded-lg hover:bg-cream text-muted hover:text-charcoal transition-colors">
                           <Download size={15} />
+                        </button>
+                        <button
+                          onClick={() => toggleTeamShared(f)}
+                          title={f.team_shared ? 'Takım paylaşımını kaldır' : 'Takımla paylaş'}
+                          className={`p-1.5 rounded-lg transition-colors ${f.team_shared ? 'text-sage bg-sage/10 hover:bg-sage/20' : 'text-muted hover:bg-cream hover:text-sage'}`}
+                        >
+                          <Users size={15} />
                         </button>
                         <button onClick={() => deleteFile(f)} disabled={deleting === f.id} title="Sil"
                           className="p-1.5 rounded-lg hover:bg-red-50 text-muted hover:text-red-500 transition-colors">

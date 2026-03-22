@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { ArrowLeft, Calendar, ClipboardList, BarChart2, User } from 'lucide-react'
+import ExportCsvButton from '@/components/panel/ExportCsvButton'
 
 interface Answer {
   question_index: number
@@ -28,11 +29,20 @@ interface TestQuestion {
   options: TestOption[]
 }
 
+interface ScoreRange {
+  min:         number
+  max:         number
+  label:       string
+  color:       'green' | 'yellow' | 'orange' | 'red'
+  description: string | null
+}
+
 interface TestWithResponses {
   id:             string
   title:          string
   description:    string | null
   questions:      TestQuestion[]
+  score_ranges:   ScoreRange[] | null
   is_active:      boolean
   is_public:      boolean
   test_responses: TestResponse[]
@@ -51,7 +61,7 @@ export default async function TestResponsesPage({
   const { data: test, error } = await supabase
     .from('tests')
     .select(`
-      id, title, description, questions, is_active, is_public,
+      id, title, description, questions, score_ranges, is_active, is_public,
       test_responses (
         id, respondent_name, answers, total_score, completed_at
       )
@@ -75,10 +85,24 @@ export default async function TestResponsesPage({
     ? t.questions.reduce((sum, q) => sum + Math.max(...(q.options?.map(o => o.score) ?? [0])), 0)
     : null
 
+  const scoreRanges: ScoreRange[] = t.score_ranges ?? []
+
+  function getScoreInterpretation(score: number | null): ScoreRange | null {
+    if (score === null || scoreRanges.length === 0) return null
+    return scoreRanges.find(r => score >= r.min && score <= r.max) ?? null
+  }
+
+  const RANGE_COLORS: Record<string, string> = {
+    green:  'bg-green-50 text-green-800 border-green-200',
+    yellow: 'bg-yellow-50 text-yellow-800 border-yellow-200',
+    orange: 'bg-orange-50 text-orange-800 border-orange-200',
+    red:    'bg-red-50 text-red-800 border-red-200',
+  }
+
   return (
     <>
       <header className="bg-white border-b border-border px-4 md:px-8 py-4 sticky top-0 z-40">
-        <div className="flex items-center gap-3 pl-10 md:pl-0">
+        <div className="flex items-center gap-3 pl-10 md:pl-0 flex-1">
           <Link
             href="/panel/tests"
             className="p-1.5 rounded-lg hover:bg-cream transition-colors text-muted hover:text-charcoal"
@@ -102,6 +126,27 @@ export default async function TestResponsesPage({
             </p>
           </div>
         </div>
+        {responses.length > 0 && (
+          <div className="ml-auto pr-2">
+            <ExportCsvButton
+              filename={`${t.title.replace(/[^a-z0-9]/gi,'-')}-yanıtlar.csv`}
+              label="Yanıtları İndir"
+              data={responses}
+              columns={[
+                { header: 'Katılımcı', value: (r: any) => r.respondent_name ?? 'Anonim' },
+                { header: 'Toplam Skor', value: (r: any) => r.total_score ?? '' },
+                { header: 'Tarih', value: (r: any) => new Date(r.completed_at).toLocaleString('tr-TR') },
+                ...t.questions.map((q: any, qi: number) => ({
+                  header: `S${qi+1}: ${q.text.slice(0,40)}`,
+                  value: (r: any) => {
+                    const ans = r.answers?.find((a: any) => a.question_index === qi)
+                    return ans !== undefined ? (q.options?.[ans.option_index]?.label ?? '') : ''
+                  }
+                }))
+              ]}
+            />
+          </div>
+        )}
       </header>
 
       <div className="p-4 md:p-6 max-w-4xl mx-auto">
@@ -124,6 +169,22 @@ export default async function TestResponsesPage({
                 {Math.max(...scoredResponses.map(r => r.total_score ?? 0))}
               </p>
               <p className="text-xs text-muted mt-0.5">En Yüksek Puan</p>
+            </div>
+          </div>
+        )}
+
+        {/* Skor aralıkları açıklaması */}
+        {scoreRanges.length > 0 && (
+          <div className="card p-4 mb-6">
+            <p className="text-xs font-bold text-muted uppercase tracking-wide mb-3">Skor Yorumlama Kılavuzu</p>
+            <div className="flex flex-wrap gap-2">
+              {scoreRanges.map((range, i) => (
+                <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium ${RANGE_COLORS[range.color]}`}>
+                  <span>{range.min}–{range.max}</span>
+                  <span className="font-bold">{range.label}</span>
+                  {range.description && <span className="opacity-70">· {range.description}</span>}
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -167,15 +228,25 @@ export default async function TestResponsesPage({
                       </p>
                     </div>
                   </div>
-                  {r.total_score !== null && (
-                    <div className="flex items-center gap-1.5 bg-white border border-border rounded-lg px-3 py-1.5 flex-shrink-0">
-                      <BarChart2 size={13} className="text-sage" />
-                      <span className="text-sm font-bold text-charcoal">{r.total_score}</span>
-                      {maxPossible && (
-                        <span className="text-xs text-muted">/ {maxPossible}</span>
-                      )}
-                    </div>
-                  )}
+                  {r.total_score !== null && (() => {
+                    const interp = getScoreInterpretation(r.total_score)
+                    return (
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {interp && (
+                          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${RANGE_COLORS[interp.color]}`}>
+                            {interp.label}
+                          </span>
+                        )}
+                        <div className="flex items-center gap-1.5 bg-white border border-border rounded-lg px-3 py-1.5">
+                          <BarChart2 size={13} className="text-sage" />
+                          <span className="text-sm font-bold text-charcoal">{r.total_score}</span>
+                          {maxPossible && (
+                            <span className="text-xs text-muted">/ {maxPossible}</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 {/* Answers */}

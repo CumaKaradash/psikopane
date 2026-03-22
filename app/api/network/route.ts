@@ -1,20 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 // app/api/network/route.ts
 
+import { toSlug } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
 type TeamMemberStatus = 'pending' | 'accepted' | 'rejected' | 'blocked'
 
 // ── Slug yardımcısı ───────────────────────────────────────────────────────────
-function toSlug(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's')
-    .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
-    .replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
-    || 'klinik'
-}
 
 // Benzersiz takım slug'ı (teams tablosunda unique)
 async function uniqueTeamSlug(

@@ -48,7 +48,6 @@ export default function DashboardClient({
   testResponses, homeworkResponses, clients,
   testTitles, homeworkTitles,
 }: Props) {
-  const [detailModal, setDetailModal] = useState<string | null>(null)
   const [isClient,    setIsClient]    = useState(false)
 
   useEffect(() => { setIsClient(true) }, [])
@@ -270,17 +269,6 @@ export default function DashboardClient({
         </div>
       </div>
 
-      {/* Detail modal */}
-      {detailModal && isClient && (
-        <div className="fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => setDetailModal(null)}>
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setDetailModal(null)}
-              className="float-right text-muted text-xl leading-none">×</button>
-            <p className="text-sm text-muted pt-2">Detaylar yakında eklenecek.</p>
-          </div>
-        </div>
-      )}
     </>
   )
 }

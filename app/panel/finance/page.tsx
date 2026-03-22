@@ -48,7 +48,7 @@ export default async function FinancePage({
           <a href={`/panel/finance?month=${nextMonth}`} className="btn-outline py-1.5 px-3 text-xs">›</a>
         </div>
       </header>
-      <FinanceClient entries={entries ?? []} income={income} expense={expense} />
+      <FinanceClient entries={entries ?? []} income={income} expense={expense} currentMonth={month} />
     </>
   )
 }

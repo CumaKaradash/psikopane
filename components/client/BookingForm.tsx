@@ -13,33 +13,6 @@ interface Props {
 
 const DEFAULT_SESSION_TYPES = ['Bireysel Terapi', 'İlk Görüşme', 'Online Seans']
 
-// ── SW / Push yardımcıları ────────────────────────────────────────────────────
-async function registerSW() {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return null
-  try { return await navigator.serviceWorker.register('/sw.js') } catch { return null }
-}
-
-async function getPushSubscription(reg: ServiceWorkerRegistration) {
-  const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-  if (!key) return null
-  try {
-    const existing = await reg.pushManager.getSubscription()
-    if (existing) return existing
-    return await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(key),
-    })
-  } catch { return null }
-}
-
-function urlBase64ToUint8Array(b64: string): ArrayBuffer {
-  const pad  = '='.repeat((4 - (b64.length % 4)) % 4)
-  const raw  = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'))
-  const arr  = new Uint8Array(raw.length)
-  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i)
-  return arr.buffer as ArrayBuffer
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 export default function BookingForm({ ctx }: Props) {
   // Geriye dönük uyumluluk: eski `profile` prop'u gelirse ctx'e dönüştür
@@ -67,8 +40,8 @@ export default function BookingForm({ ctx }: Props) {
 
   const [submitted,      setSubmitted]      = useState(false)
   const [loading,        setLoading]        = useState(false)
+  const [busySlots,      setBusySlots]      = useState<string[]>([])
   const [notifyConsent,  setNotifyConsent]  = useState(false)
-  const [pushSupported,  setPushSupported]  = useState(false)
 
   const [form, setForm] = useState({
     first_name:   '',
@@ -88,9 +61,18 @@ export default function BookingForm({ ctx }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMemberId])
 
+  // Psikologun meşgul saatlerini çek
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'PushManager' in window) setPushSupported(true)
-  }, [])
+    const psychId = isTeam ? selectedMemberId : (activeProfile?.id ?? '')
+    if (!psychId) return
+    const from = new Date().toISOString()
+    const to   = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    fetch(`/api/appointments/busy?psychologist_id=${psychId}&from=${from}&to=${to}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(slots => setBusySlots(Array.isArray(slots) ? slots : []))
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMemberId, activeProfile?.id])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -101,15 +83,6 @@ export default function BookingForm({ ctx }: Props) {
 
     setLoading(true)
     try {
-      let pushSubscription: PushSubscription | null = null
-      if (notifyConsent && pushSupported) {
-        const perm = await Notification.requestPermission()
-        if (perm === 'granted') {
-          const reg = await registerSW()
-          if (reg) pushSubscription = await getPushSubscription(reg)
-        }
-      }
-
       const guest_name      = `${form.first_name.trim()} ${form.last_name.trim()}`.trim()
       const psychologist_id = isTeam ? selectedMemberId : individualProfile!.id
 
@@ -126,8 +99,7 @@ export default function BookingForm({ ctx }: Props) {
             ? new Date(form.starts_at).toISOString()
             : new Date().toISOString(),
           psychologist_id,
-          notify_consent:    notifyConsent,
-          push_subscription: pushSubscription ? JSON.stringify(pushSubscription) : null,
+          notify_consent:    notifyConsent ?? false,
         }),
       })
 
@@ -260,6 +232,15 @@ export default function BookingForm({ ctx }: Props) {
         <label className="label">Tercih Ettiğiniz Tarih / Saat</label>
         <input className="input" type="datetime-local"
           value={form.starts_at} onChange={e => set('starts_at', e.target.value)} />
+        {form.starts_at && busySlots.some(busy => {
+          const selected = new Date(form.starts_at).getTime()
+          const busyStart = new Date(busy).getTime()
+          return Math.abs(selected - busyStart) < 60 * 60 * 1000 // 1 saatlik pencere
+        }) && (
+          <p className="text-xs text-orange-600 mt-1 flex items-center gap-1">
+            ⚠ Seçtiğiniz saat dolu veya yakın randevu var. Lütfen başka bir saat deneyin.
+          </p>
+        )}
       </div>
 
       <div>
@@ -287,12 +268,7 @@ export default function BookingForm({ ctx }: Props) {
         <span className="text-xs text-muted leading-relaxed">
           Randevu detaylarını ve hatırlatmalarını{' '}
           <strong>e-posta</strong>
-          {pushSupported && <> ve <strong>tarayıcı bildirimi</strong></>} olarak almayı kabul ediyorum.
-          {pushSupported && notifyConsent && (
-            <span className="block text-sage mt-0.5">
-              🔔 Gönder tuşuna basıldığında bildirim izni istenecek.
-            </span>
-          )}
+olarak almayı kabul ediyorum.
         </span>
       </label>
 

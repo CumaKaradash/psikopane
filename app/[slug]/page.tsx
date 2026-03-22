@@ -1,5 +1,6 @@
 // app/[slug]/page.tsx — Bireysel psikolog veya klinik vitrin sayfası (public)
 
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -8,7 +9,7 @@ import type { Metadata } from 'next'
 interface Props { params: Promise<{ slug: string }> }
 
 // ── Veri çekici yardımcı (generateMetadata + page aynı supabase çağrısını tekrarlamamak için) ──
-async function resolveSlug(slug: string) {
+const resolveSlug = cache(async function resolveSlug(slug: string) {
   const supabase = await createClient()
 
   const { data: profile } = await supabase
@@ -33,7 +34,7 @@ async function resolveSlug(slug: string) {
     .eq('team_id', team.id)
 
   return { type: 'team' as const, profile: null, team, members: members ?? [] }
-}
+})
 
 // ── generateMetadata — Open Graph dahil ──────────────────────────────────────
 export async function generateMetadata({ params: rawParams }: Props): Promise<Metadata> {

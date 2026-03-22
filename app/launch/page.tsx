@@ -99,7 +99,7 @@ export default function LaunchPage() {
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
-                href="/auth/login"
+                href="/auth"
                 className="inline-flex items-center justify-center px-8 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors"
               >
                 Giriş Yap
@@ -107,7 +107,7 @@ export default function LaunchPage() {
               </Link>
               
               <Link
-                href="/auth/register"
+                href="/auth"
                 className="inline-flex items-center justify-center px-8 py-3 bg-white/10 text-white font-semibold rounded-lg border border-white/20 hover:bg-white/20 transition-colors"
               >
                 Ücretsiz Deneyin

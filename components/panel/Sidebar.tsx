@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard, CalendarDays, Users, Archive,
   Link2, FlaskConical, BookOpen, BarChart3, LogOut, Menu, X,
-  Network, Globe, Newspaper, Settings,
+  Network, Globe, Newspaper, Settings, MessageSquare,
 } from 'lucide-react'
 
 interface Props {
@@ -40,7 +40,8 @@ const nav = [
     { href: '/panel/news',      icon: Newspaper, label: 'Psikoloji Bülteni' },
   ]},
   { label: 'Hesap', items: [
-    { href: '/panel/settings',  icon: Settings,  label: 'Profil Ayarları'  },
+    { href: '/panel/feedback',  icon: MessageSquare,  label: 'Geri Bildirim' },
+    { href: '/panel/settings',  icon: Settings,      label: 'Profil Ayarları'  },
   ]},
 ]
 
@@ -52,7 +53,7 @@ export default function Sidebar({ profile }: Props) {
 
   async function logout() {
     await supabase.auth.signOut()
-    router.push('/auth/login')
+    router.push('/auth')
   }
 
   const initials = profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()

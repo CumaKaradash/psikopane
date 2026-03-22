@@ -1,7 +1,7 @@
 'use client'
 // components/panel/NewsClient.tsx
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Search, ExternalLink, Clock, Bookmark,
   BookmarkCheck, Rss, Plus, Trash2,
@@ -43,7 +43,18 @@ function timeAgo(s: string) {
 export default function NewsClient({ articles, rssFeeds: initialFeeds }: Props) {
   const [search,     setSearch]     = useState('')
   const [cat,        setCat]        = useState('Tümü')
-  const [saved,      setSaved]      = useState<Set<string>>(new Set())
+  const [saved, setSaved] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set<string>()
+    try {
+      const stored = localStorage.getItem('psikopanel_saved_articles')
+      return stored ? new Set<string>(JSON.parse(stored)) : new Set<string>()
+    } catch { return new Set<string>() }
+  })
+
+  // localStorage'a kaydet
+  useEffect(() => {
+    try { localStorage.setItem('psikopanel_saved_articles', JSON.stringify([...saved])) } catch {}
+  }, [saved])
   const [showOnly,   setShowOnly]   = useState<'all' | 'saved'>('all')
   const [feeds,      setFeeds]      = useState<RssFeed[]>(initialFeeds)
   const [rssOpen,    setRssOpen]    = useState(false)

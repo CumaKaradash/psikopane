@@ -12,6 +12,7 @@ export type Profile = {
   session_price: number
   avatar_url: string | null
   created_at: string
+  updated_at: string
 }
 
 export type Client = {
@@ -20,10 +21,13 @@ export type Client = {
   full_name: string
   phone: string | null
   email: string | null
+  birth_date: string | null      // YYYY-MM-DD
+  address: string | null
   session_type: string | null
   notes: string | null
   status: 'active' | 'passive' | 'new'
   created_at: string
+  updated_at: string
 }
 
 export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed'
@@ -54,6 +58,14 @@ export type TestQuestion = {
   options: { label: string; score: number }[]
 }
 
+export type ScoreRange = {
+  min:         number
+  max:         number
+  label:       string   // örn: "Minimal Depresyon"
+  color:       'green' | 'yellow' | 'orange' | 'red'
+  description: string | null
+}
+
 export type Test = {
   id: string
   psychologist_id: string
@@ -61,6 +73,7 @@ export type Test = {
   title: string
   description: string | null
   questions: TestQuestion[]
+  score_ranges: ScoreRange[] | null  // opsiyonel skor yorumlama aralıkları
   is_active: boolean
   is_public: boolean
   created_at: string
@@ -126,6 +139,16 @@ export type BookingRequest = {
 
 export type PublicProfile = Pick<Profile, 'id' | 'slug' | 'full_name' | 'title' | 'bio' | 'session_types' | 'session_price' | 'avatar_url'>
 
+// ── Seans Notları ────────────────────────────────────────────────────────────
+export type SessionNote = {
+  id:             string
+  appointment_id: string
+  psychologist_id: string
+  content:        string
+  updated_at:     string
+  created_at:     string
+}
+
 // ── Network / Teams ───────────────────────────────────────────────────────────
 export type TeamRole = 'owner' | 'member'
 
@@ -139,6 +162,7 @@ export type Team = {
   session_types: string[]
   avatar_url:   string | null
   created_at:   string
+  updated_at:   string
   // joined
   members?: TeamMember[]
 }

@@ -1,29 +1,48 @@
 'use client'
-// components/panel/FinanceClient.tsx — Düzenleme + silme eklendi
+// components/panel/FinanceClient.tsx
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import toast from 'react-hot-toast'
 import type { FinanceEntry } from '@/lib/types'
-import { Pencil, Trash2, Plus, Check, X } from 'lucide-react'
+import { Pencil, Trash2, Plus, Check, X, Download, BarChart2, List } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+
+// ── Demo Paywall entegrasyonu ─────────────────────────────────────────────────
+import { useDemoUser }  from '@/hooks/useDemoUser'
+import DemoPaywallModal from '@/components/panel/DemoPaywallModal'
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface Props {
-  entries: FinanceEntry[]
-  income: number
-  expense: number
+  entries:      FinanceEntry[]
+  income:       number
+  expense:      number
+  currentMonth: string  // "YYYY-MM" formatında — CSV ve grafik için
 }
 
 type FormState = { type: string; amount: string; description: string; entry_date: string }
 const emptyForm = (): FormState => ({ type: 'income', amount: '', description: '', entry_date: '' })
 
-export default function FinanceClient({ entries: initial, income, expense }: Props) {
-  const [entries,       setEntries]       = useState(initial)
-  const [addOpen,       setAddOpen]       = useState(false)
-  const [loading,       setLoading]       = useState(false)
-  const [form,          setForm]          = useState(emptyForm())
-  const [editId,        setEditId]        = useState<string | null>(null)
-  const [editForm,      setEditForm]      = useState(emptyForm())
-  const [localIncome,   setLocalIncome]   = useState(income)
-  const [localExpense,  setLocalExpense]  = useState(expense)
+export default function FinanceClient({ entries: initial, income, expense, currentMonth }: Props) {
+  const [entries,      setEntries]     = useState(initial)
+  const [addOpen,      setAddOpen]     = useState(false)
+  const [loading,      setLoading]     = useState(false)
+  const [form,         setForm]        = useState(emptyForm())
+  const [editId,       setEditId]      = useState<string | null>(null)
+  const [editForm,     setEditForm]    = useState(emptyForm())
+  const [localIncome,  setLocalIncome]  = useState(income)
+  const [localExpense, setLocalExpense] = useState(expense)
+  const [exportLoading, setExportLoading] = useState(false)
+  const [view,         setView]         = useState<'list' | 'chart'>('list')
+
+  // ── Demo Paywall state ──────────────────────────────────────────────────────
+  const { isDemoUser }                = useDemoUser()
+  const [paywallOpen, setPaywallOpen] = useState(false)
+
+  function guardDemo(): boolean {
+    if (isDemoUser) { setPaywallOpen(true); return true }
+    return false
+  }
+  // ───────────────────────────────────────────────────────────────────────────
 
   const net = localIncome - localExpense
 
@@ -35,6 +54,8 @@ export default function FinanceClient({ entries: initial, income, expense }: Pro
   // ── Ekle ─────────────────────────────────────────────────────────────────
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
+    if (guardDemo()) return  // 🔒 Demo engeli
+
     if (!form.amount || !form.description) { toast.error('Tutar ve açıklama zorunlu'); return }
     const amt = parseFloat(form.amount)
     if (isNaN(amt) || amt <= 0) { toast.error('Geçerli bir tutar girin'); return }
@@ -57,12 +78,15 @@ export default function FinanceClient({ entries: initial, income, expense }: Pro
 
   // ── Düzenle aç ───────────────────────────────────────────────────────────
   function openEdit(e: FinanceEntry) {
+    if (guardDemo()) return  // 🔒 Demo engeli
     setEditId(e.id)
     setEditForm({ type: e.type, amount: String(e.amount), description: e.description, entry_date: e.entry_date })
   }
 
   // ── Düzenle kaydet ───────────────────────────────────────────────────────
   async function handleEdit(id: string) {
+    if (guardDemo()) return  // 🔒 Demo engeli
+
     const amt = parseFloat(editForm.amount)
     if (isNaN(amt) || amt <= 0 || !editForm.description) { toast.error('Geçerli veri girin'); return }
     try {
@@ -83,6 +107,8 @@ export default function FinanceClient({ entries: initial, income, expense }: Pro
 
   // ── Sil ──────────────────────────────────────────────────────────────────
   async function handleDelete(id: string) {
+    if (guardDemo()) return  // 🔒 Demo engeli
+
     if (!confirm('Bu işlemi silmek istediğinize emin misiniz?')) return
     const res = await fetch(`/api/finance?id=${id}`, { method: 'DELETE' })
     if (res.ok) {
@@ -92,8 +118,69 @@ export default function FinanceClient({ entries: initial, income, expense }: Pro
     } else toast.error('Silinemedi')
   }
 
+  // ── "İşlem Ekle" butonuna tıklanınca ──────────────────────────────────────
+  function handleOpenAddModal() {
+    if (guardDemo()) return  // 🔒 Demo engeli
+    setAddOpen(true)
+  }
+
+  // ── CSV Dışa Aktar ────────────────────────────────────────────────────────
+  // ── Grafik verisi ─────────────────────────────────────────────────────────
+  const chartData = useMemo(() => {
+    const byDay: Record<string, { date: string; gelir: number; gider: number }> = {}
+    for (const e of entries) {
+      if (!byDay[e.entry_date]) byDay[e.entry_date] = { date: e.entry_date.slice(5), gelir: 0, gider: 0 }
+      if (e.type === 'income')  byDay[e.entry_date].gelir  += e.amount
+      if (e.type === 'expense') byDay[e.entry_date].gider  += e.amount
+    }
+    return Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date))
+  }, [entries])
+
+  // ── CSV Dışa Aktar ────────────────────────────────────────────────────────
+  async function handleExport() {
+    if (guardDemo()) return
+    setExportLoading(true)
+    try {
+      const url = `/api/finance/export?month=${currentMonth}`
+      const res = await fetch(url)
+      if (!res.ok) throw new Error('Dışa aktarma başarısız')
+      const blob = await res.blob()
+      const a    = document.createElement('a')
+      a.href     = URL.createObjectURL(blob)
+      a.download = `finans-${currentMonth}.csv`
+      a.click()
+      URL.revokeObjectURL(a.href)
+      toast.success('CSV indirildi!')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Hata oluştu')
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
   return (
     <div className="p-4 md:p-6">
+
+      {/* ── Demo Paywall Modal ───────────────────────────────────────────────── */}
+      <DemoPaywallModal isOpen={paywallOpen} onClose={() => setPaywallOpen(false)} />
+
+      {/* ── Demo Banner ─────────────────────────────────────────────────────── */}
+      {isDemoUser && (
+        <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <span className="text-base leading-none mt-0.5">🔒</span>
+          <p className="text-sm text-amber-800">
+            <span className="font-semibold">Demo modundasınız.</span>{' '}
+            Gelir/gider ekleyemez, düzenleyemez veya silemezsiniz.{' '}
+            <button
+              onClick={() => setPaywallOpen(true)}
+              className="font-semibold underline underline-offset-2 hover:no-underline"
+            >
+              Tam sürümü başlatın →
+            </button>
+          </p>
+        </div>
+      )}
+
       {/* Özet kartlar */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="card p-5">
@@ -116,18 +203,64 @@ export default function FinanceClient({ entries: initial, income, expense }: Pro
       <div className="card">
         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
           <h3 className="text-sm font-semibold">İşlemler</h3>
-          <button onClick={() => setAddOpen(true)} className="btn-primary flex items-center gap-1.5">
-            <Plus size={14} /> İşlem Ekle
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExport}
+              disabled={exportLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-border rounded-lg text-muted hover:text-charcoal hover:bg-sand transition-colors disabled:opacity-50"
+              title="Tüm işlemleri CSV olarak indir"
+            >
+              <Download size={13} />
+              {exportLoading ? 'İndiriliyor…' : 'CSV İndir'}
+            </button>
+            <button
+              onClick={() => setView(v => v === 'list' ? 'chart' : 'list')}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-border rounded-lg text-muted hover:text-charcoal hover:bg-sand transition-colors"
+              title={view === 'list' ? 'Grafiği göster' : 'Listeyi göster'}
+            >
+              {view === 'list' ? <><BarChart2 size={13} /> Grafik</> : <><List size={13} /> Liste</>}
+            </button>
+            <button onClick={handleOpenAddModal} className="btn-primary flex items-center gap-1.5">
+            {isDemoUser
+              ? <><span className="text-xs">🔒</span> İşlem Ekle</>
+              : <><Plus size={14} /> İşlem Ekle</>
+            }
           </button>
+          </div>
         </div>
-        {entries.length === 0 ? (
+        {/* ── Grafik görünümü ─────────────────────────────────────────── */}
+        {view === 'chart' && (
+          <div className="px-6 py-6">
+            {chartData.length === 0 ? (
+              <p className="text-sm text-muted text-center py-8">Bu ay kayıt yok</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={chartData} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-tertiary)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="var(--color-border-secondary)" />
+                  <YAxis tick={{ fontSize: 11 }} stroke="var(--color-border-secondary)" tickFormatter={v => `₺${v.toLocaleString('tr-TR')}`} />
+                  <Tooltip
+                    formatter={(value: number, name: string) => [`₺${value.toLocaleString('tr-TR')}`, name === 'gelir' ? 'Gelir' : 'Gider']}
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--color-border-secondary)' }}
+                  />
+                  <Legend formatter={(v: string) => v === 'gelir' ? 'Gelir' : 'Gider'} />
+                  <Bar dataKey="gelir"  fill="#5a7a6a" radius={[4,4,0,0]} />
+                  <Bar dataKey="gider"  fill="#e57373" radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        )}
+
+        {/* ── Liste görünümü ───────────────────────────────────────────── */}
+        {view === 'list' && (entries.length === 0 ? (
           <p className="px-6 py-12 text-center text-sm text-muted">Bu ay henüz işlem yok</p>
         ) : (
           <ul>
             {entries.map(e => (
               <li key={e.id} className="border-b border-border/60 last:border-0 hover:bg-cream/40 transition-colors group">
                 {editId === e.id ? (
-                  // ── Satır içi düzenleme formu ────────────────────────
+                  // ── Satır içi düzenleme formu ────────────────────────────
                   <div className="px-6 py-3 space-y-2">
                     <div className="flex gap-2">
                       {(['income', 'expense'] as const).map(t => (
@@ -156,7 +289,7 @@ export default function FinanceClient({ entries: initial, income, expense }: Pro
                     </div>
                   </div>
                 ) : (
-                  // ── Normal satır görünümü ────────────────────────────
+                  // ── Normal satır görünümü ────────────────────────────────
                   <div className="flex items-center gap-4 px-6 py-3.5">
                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${e.type === 'income' ? 'bg-green-500' : 'bg-red-400'}`} />
                     <div className="flex-1 min-w-0">
@@ -181,7 +314,7 @@ export default function FinanceClient({ entries: initial, income, expense }: Pro
               </li>
             ))}
           </ul>
-        )}
+        ))}
       </div>
 
       {/* Yeni işlem modal */}

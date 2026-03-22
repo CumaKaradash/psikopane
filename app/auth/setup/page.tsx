@@ -6,13 +6,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-
-function toSlug(name: string) {
-  return name.toLowerCase()
-    .replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ş/g,'s')
-    .replace(/ı/g,'i').replace(/ö/g,'o').replace(/ç/g,'c')
-    .replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'')
-}
+import { toSlug } from '@/lib/utils'
 
 export default function SetupPage() {
   const [form, setForm] = useState({
@@ -35,7 +29,7 @@ export default function SetupPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         toast.error('Oturum bulunamadı, tekrar giriş yapın')
-        router.push('/auth/login')
+        router.push('/auth')
         return
       }
 

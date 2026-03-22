@@ -70,13 +70,21 @@ export default async function BookingPage({ params: rawParams }: Props) {
   const supabase = await createClient()
   const { slug } = await rawParams
 
-  // ── 1. Bireysel profil ────────────────────────────────────────────────────
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, slug, full_name, title, bio, session_types, session_price, avatar_url')
-    .eq('slug', slug)
-    .single()
+  // ── Profil + Takım sorgularını paralel çalıştır ───────────────────────────
+  const [{ data: profile }, { data: team }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('id, slug, full_name, title, bio, session_types, session_price, avatar_url')
+      .eq('slug', slug)
+      .single(),
+    supabase
+      .from('teams')
+      .select('id, slug, name, description, session_types, avatar_url')
+      .eq('slug', slug)
+      .single(),
+  ])
 
+  // ── 1. Bireysel profil ────────────────────────────────────────────────────
   if (profile) {
     const ctx: BookingContext = {
       type:        'individual',
@@ -96,11 +104,6 @@ export default async function BookingPage({ params: rawParams }: Props) {
   }
 
   // ── 2. Takım / Klinik ─────────────────────────────────────────────────────
-  const { data: team } = await supabase
-    .from('teams')
-    .select('id, slug, name, description, session_types, avatar_url')
-    .eq('slug', slug)
-    .single()
 
   if (!team) notFound()
 

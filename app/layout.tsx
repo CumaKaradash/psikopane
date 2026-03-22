@@ -1,21 +1,29 @@
 // app/layout.tsx
 import type { Metadata } from 'next'
-import { DM_Sans, DM_Serif_Display } from 'next/font/google'
+import localFont from 'next/font/local'
 import { Toaster } from 'react-hot-toast'
 import './globals.css'
 
-const dmSans = DM_Sans({
-  subsets: ['latin'],
+const dmSans = localFont({
+  src: [
+    { path: '../public/fonts/dm-sans/dm-sans-latin-300-normal.woff2', weight: '300', style: 'normal' },
+    { path: '../public/fonts/dm-sans/dm-sans-latin-400-normal.woff2', weight: '400', style: 'normal' },
+    { path: '../public/fonts/dm-sans/dm-sans-latin-500-normal.woff2', weight: '500', style: 'normal' },
+    { path: '../public/fonts/dm-sans/dm-sans-latin-700-normal.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--font-sans',
   display: 'swap',
+  fallback: ['system-ui', 'sans-serif'],
 })
 
-const dmSerif = DM_Serif_Display({
-  subsets: ['latin'],
-  weight: '400',
-  style: ['normal', 'italic'],
+const dmSerif = localFont({
+  src: [
+    { path: '../public/fonts/dm-serif/dm-serif-display-latin-400-normal.woff2', weight: '400', style: 'normal' },
+    { path: '../public/fonts/dm-serif/dm-serif-display-latin-400-italic.woff2', weight: '400', style: 'italic' },
+  ],
   variable: '--font-serif',
   display: 'swap',
+  fallback: ['Georgia', 'serif'],
 })
 
 export const metadata: Metadata = {

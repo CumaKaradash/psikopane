@@ -1,10 +1,13 @@
 // public/sw.js — PsikoPanel Service Worker
 // Push bildirimleri + offline caching (temel)
 
-const CACHE_NAME = 'psikopanel-v1'
+const CACHE_NAME = 'psikopanel-' + (self.__SW_VERSION || 'v1')
 
 // ── Install ──────────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
+  // __SW_VERSION global'ini Supabase veya build pipeline inject edebilir
+  // Fallback olarak install timestamp kullan
+  if (!self.__SW_VERSION) self.__SW_VERSION = String(Date.now())
   self.skipWaiting()
 })
 

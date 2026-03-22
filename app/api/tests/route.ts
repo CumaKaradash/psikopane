@@ -1,17 +1,19 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 // app/api/tests/route.ts
 
+import { toSlug } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
+
+const TestSchema = z.object({
+  title:       z.string().min(2, 'Başlık en az 2 karakter olmalı').max(200),
+  slug:        z.string().regex(/^[a-z0-9-]+$/).min(2).max(100).optional(),
+  description: z.string().max(1000).optional().nullable(),
+  is_public:   z.boolean().optional(),
+})
 
 // ── Slug yardımcısı ───────────────────────────────────────────────────────────
-function toSlug(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's')
-    .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
-    .replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
-}
 
 // ── Benzersiz slug üretici (DB çakışmasına karşı retry) ──────────────────────
 async function generateUniqueSlug(
@@ -42,6 +44,7 @@ async function generateUniqueSlug(
 // ── GET ───────────────────────────────────────────────────────────────────────
 // GET /api/tests              → kullanıcının testleri
 // GET /api/tests?community=1  → is_public=true olanlar (başkalarının)
+// GET /api/tests?team_id=xxx  → takım üyelerinin testleri
 export async function GET(req: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -49,6 +52,33 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url)
   const community = searchParams.get('community') === '1'
+  const teamId    = searchParams.get('team_id')
+  const memberId  = searchParams.get('member_id')
+
+  if (teamId) {
+    // Takım üyeliğini doğrula
+    const { data: membership } = await supabase.from('team_members').select('id')
+      .eq('team_id', teamId).eq('psychologist_id', user.id).eq('status', 'accepted').single()
+    const { data: teamOwner } = await supabase.from('teams').select('id')
+      .eq('id', teamId).eq('owner_id', user.id).single()
+    if (!membership && !teamOwner)
+      return NextResponse.json({ error: 'Yetkisiz erişim' }, { status: 403 })
+
+    const { data: members } = await supabase.from('team_members').select('psychologist_id')
+      .eq('team_id', teamId).eq('status', 'accepted')
+    const memberIds = (members ?? []).map(m => m.psychologist_id)
+
+    let query = supabase.from('tests').select('*')
+      .in('psychologist_id', memberIds.length > 0 ? memberIds : ['__none__'])
+      .eq('team_shared', true)
+      .order('created_at', { ascending: false })
+
+    if (memberId) query = query.eq('psychologist_id', memberId)
+
+    const { data, error } = await query
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(data)
+  }
 
   if (community) {
     const { data, error } = await supabase
@@ -131,7 +161,11 @@ export async function POST(req: Request) {
   }
 
   // ── Normal test oluşturma ─────────────────────────────────────────────────
-  const { slug, title, description, questions, is_public } = body
+  const postParsed = TestSchema.safeParse(body)
+  if (!postParsed.success)
+    return NextResponse.json({ error: postParsed.error.issues[0]?.message ?? 'Geçersiz veri' }, { status: 400 })
+
+  const { slug, title, description, questions, is_public } = { ...body, ...postParsed.data }
   if (!slug || !title)
     return NextResponse.json({ error: 'Slug ve başlık zorunlu' }, { status: 400 })
 
