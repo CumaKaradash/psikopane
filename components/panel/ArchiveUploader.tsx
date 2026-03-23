@@ -5,12 +5,7 @@ import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
-import { UploadCloud, X, FileText, Loader2, CheckCircle2, Tag, AlignLeft, Lock } from 'lucide-react'
-
-// ── Demo Paywall entegrasyonu ─────────────────────────────────────────────────
-import { useDemoUser }  from '@/hooks/useDemoUser'
-import DemoPaywallModal from '@/components/panel/DemoPaywallModal'
-// ─────────────────────────────────────────────────────────────────────────────
+import { UploadCloud, X, FileText, Loader2, CheckCircle2, Tag, AlignLeft } from 'lucide-react'
 
 interface Props { userId: string }
 
@@ -28,16 +23,6 @@ export default function ArchiveUploader({ userId }: Props) {
   const [filesState,        setFilesState]        = useState<UploadedFile[]>([])
   const [uploadNote,        setUploadNote]        = useState('')
   const [selectedCategory,  setSelectedCategory]  = useState('auto')
-
-  // ── Demo Paywall state ──────────────────────────────────────────────────────
-  const { isDemoUser }                = useDemoUser()
-  const [paywallOpen, setPaywallOpen] = useState(false)
-
-  function guardDemo(): boolean {
-    if (isDemoUser) { setPaywallOpen(true); return true }
-    return false
-  }
-  // ───────────────────────────────────────────────────────────────────────────
 
   const router   = useRouter()
   const supabase = createClient()
@@ -87,13 +72,11 @@ export default function ArchiveUploader({ userId }: Props) {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (authError || !user) throw new Error('Oturum doğrulanamadı. Lütfen sayfayı yenileyin.')
 
-      // İlk deneyin - bucket yoksa otomatik oluştur ve tekrar dene
       let { error: storageError } = await supabase.storage
         .from('psychologist-documents')
         .upload(storagePath, file, { cacheControl: '3600', upsert: false })
 
       if (storageError?.message?.toLowerCase().includes('bucket')) {
-        // Bucket yok - otomatik kur ve tekrar dene
         await ensureBucket()
         const retry = await supabase.storage
           .from('psychologist-documents')
@@ -126,8 +109,6 @@ export default function ArchiveUploader({ userId }: Props) {
   }
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
-    if (guardDemo()) return  // 🔒 Demo engeli
-
     const fileArray = Array.from(files)
     if (fileArray.some(f => f.size > 10 * 1024 * 1024)) {
       toast.error('Maksimum dosya boyutu 10 MB sınırını aşamaz.'); return
@@ -138,19 +119,14 @@ export default function ArchiveUploader({ userId }: Props) {
       if (isOk) successCount++
     }
     if (successCount > 0) { setUploadNote(''); router.refresh() }
-  }, [userId, uploadNote, selectedCategory, router, supabase, isDemoUser])
+  }, [userId, uploadNote, selectedCategory, router, supabase])
 
-  // ── Sürükle-bırak ─────────────────────────────────────────────────────────
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault(); setIsDragOver(false)
     if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files)
   }
 
-  // ── Dosya input onChange ───────────────────────────────────────────────────
   const onFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (guardDemo()) {                          // 🔒 Demo engeli — input sıfırla
-      e.target.value = ''; return
-    }
     if (e.target.files && e.target.files.length > 0) handleFiles(e.target.files)
   }
 
@@ -158,24 +134,6 @@ export default function ArchiveUploader({ userId }: Props) {
 
   return (
     <section className="bg-white p-6 rounded-2xl border border-border shadow-sm">
-
-      {/* ── Demo Paywall Modal ─────────────────────────────────────────────── */}
-      <DemoPaywallModal isOpen={paywallOpen} onClose={() => setPaywallOpen(false)} />
-
-      {/* ── Demo Banner ───────────────────────────────────────────────────── */}
-      {isDemoUser && (
-        <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <Lock size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-800">
-            <span className="font-semibold">Demo modundasınız.</span>{' '}
-            Sisteme yeni dosya yükleyemezsiniz.{' '}
-            <button onClick={() => setPaywallOpen(true)}
-              className="font-semibold underline underline-offset-2 hover:no-underline">
-              Tam sürümü başlatın →
-            </button>
-          </p>
-        </div>
-      )}
 
       <div className="mb-6 flex flex-col md:flex-row gap-4">
         {/* Kategori */}
@@ -186,8 +144,7 @@ export default function ArchiveUploader({ userId }: Props) {
           <select
             value={selectedCategory}
             onChange={e => setSelectedCategory(e.target.value)}
-            disabled={isDemoUser}
-            className="w-full bg-cream/50 border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sage disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full bg-cream/50 border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sage"
           >
             <option value="auto">✨ Otomatik (Uzantıya Göre Ayır)</option>
             <option value="PDF Dökümanlar">PDF Dökümanlar</option>
@@ -208,8 +165,7 @@ export default function ArchiveUploader({ userId }: Props) {
             placeholder="Örn: Pazartesi günkü seans için hazırlanan materyaller..."
             value={uploadNote}
             onChange={e => setUploadNote(e.target.value)}
-            disabled={isDemoUser}
-            className="w-full bg-cream/50 border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sage disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full bg-cream/50 border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sage"
           />
         </div>
       </div>
@@ -217,55 +173,31 @@ export default function ArchiveUploader({ userId }: Props) {
       {/* ── Yükleme alanı ─────────────────────────────────────────────────── */}
       <div
         className={`relative group flex flex-col items-center justify-center w-full p-10 border-2 border-dashed rounded-xl transition-all
-          ${isDemoUser
-            ? 'border-amber-200 bg-amber-50/40 cursor-not-allowed'
-            : isDragOver
-              ? 'border-sage bg-sage-pale/50 cursor-pointer'
-              : 'border-sage-l hover:bg-sage-pale/50 hover:border-sage-l cursor-pointer'
+          ${isDragOver
+            ? 'border-sage bg-sage-pale/50 cursor-pointer'
+            : 'border-sage-l hover:bg-sage-pale/50 hover:border-sage-l cursor-pointer'
           }`}
-        onDrop={isDemoUser ? e => { e.preventDefault(); setPaywallOpen(true) } : onDrop}
-        onDragOver={e => { e.preventDefault(); if (!isDemoUser) setIsDragOver(true) }}
+        onDrop={onDrop}
+        onDragOver={e => { e.preventDefault(); setIsDragOver(true) }}
         onDragLeave={e => { e.preventDefault(); setIsDragOver(false) }}
-        onClick={isDemoUser ? () => setPaywallOpen(true) : undefined}
       >
-        {/* Gizli file input — sadece normal mod */}
-        {!isDemoUser && (
-          <input
-            type="file"
-            multiple
-            onChange={onFileSelect}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-            title="Dosya seçmek için tıklayın"
-          />
-        )}
+        <input
+          type="file"
+          multiple
+          onChange={onFileSelect}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+          title="Dosya seçmek için tıklayın"
+        />
 
         <div className="flex flex-col items-center text-center space-y-3 pointer-events-none">
-          <div className={`p-4 rounded-full transition-all duration-300
-            ${isDemoUser
-              ? 'bg-amber-50 text-amber-400'
-              : 'bg-sage-pale text-sage group-hover:scale-110 group-hover:bg-sage-pale'}`}>
-            {isDemoUser
-              ? <Lock className="w-8 h-8" />
-              : <UploadCloud className="w-8 h-8" />
-            }
+          <div className="p-4 rounded-full bg-sage-pale text-sage group-hover:scale-110 transition-all duration-300">
+            <UploadCloud className="w-8 h-8" />
           </div>
           <div>
-            {isDemoUser ? (
-              <>
-                <h4 className="text-base font-semibold text-amber-700">Dosya yükleme kısıtlı</h4>
-                <p className="text-sm text-amber-600 mt-1">
-                  Demo modunda dosya yükleyemezsiniz.{' '}
-                  <span className="font-semibold underline">Tam sürüm için tıklayın →</span>
-                </p>
-              </>
-            ) : (
-              <>
-                <h4 className="text-base font-semibold text-charcoal">Dosyaları buraya sürükleyip bırakın</h4>
-                <p className="text-sm text-muted mt-1">
-                  veya gözatmak için <span className="text-sage font-medium">tıklayın</span>
-                </p>
-              </>
-            )}
+            <h4 className="text-base font-semibold text-charcoal">Dosyaları buraya sürükleyip bırakın</h4>
+            <p className="text-sm text-muted mt-1">
+              veya gözatmak için <span className="text-sage font-medium">tıklayın</span>
+            </p>
           </div>
         </div>
       </div>

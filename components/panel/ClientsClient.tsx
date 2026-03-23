@@ -6,10 +6,6 @@ import toast from 'react-hot-toast'
 import type { Client } from '@/lib/types'
 import { Mail, MessageCircle, Search, UserPlus, Phone, Trash2 } from 'lucide-react'
 
-// ── Demo Paywall entegrasyonu ─────────────────────────────────────────────────
-import { useDemoUser }       from '@/hooks/useDemoUser'
-import DemoPaywallModal      from '@/components/panel/DemoPaywallModal'
-// ─────────────────────────────────────────────────────────────────────────────
 
 interface Props {
   clients:     Client[]
@@ -45,10 +41,6 @@ export default function ClientsClient({ clients: initial, profileSlug }: Props) 
     notes:        '',
   })
 
-  // ── Demo Paywall state ──────────────────────────────────────────────────────
-  const { isDemoUser }        = useDemoUser()
-  const [paywallOpen, setPaywallOpen] = useState(false)
-  // ───────────────────────────────────────────────────────────────────────────
 
   const filtered = clients.filter(c =>
     c.full_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -61,10 +53,6 @@ export default function ClientsClient({ clients: initial, profileSlug }: Props) 
     e.preventDefault()
 
     // 🔒 Demo kullanıcı kontrolü — API isteğini engelle, modal göster
-    if (isDemoUser) {
-      setPaywallOpen(true)
-      return
-    }
 
     if (!form.full_name) { toast.error('Ad zorunlu'); return }
     setLoading(true)
@@ -90,10 +78,6 @@ export default function ClientsClient({ clients: initial, profileSlug }: Props) 
   // ── Durum güncelleme ────────────────────────────────────────────────────────
   async function updateStatus(id: string, status: string) {
     // 🔒 Demo kullanıcı kontrolü
-    if (isDemoUser) {
-      setPaywallOpen(true)
-      return
-    }
 
     const res = await fetch('/api/clients', {
       method:  'PATCH',
@@ -115,10 +99,6 @@ export default function ClientsClient({ clients: initial, profileSlug }: Props) 
   // ── Danışan silme ───────────────────────────────────────────────────────────
   async function deleteClient(client: Client) {
     // 🔒 Demo kullanıcı kontrolü
-    if (isDemoUser) {
-      setPaywallOpen(true)
-      return
-    }
 
     setLoading(true)
     try {
@@ -149,39 +129,15 @@ export default function ClientsClient({ clients: initial, profileSlug }: Props) 
   // ── "Yeni Danışan" butonuna tıklanınca ─────────────────────────────────────
   // Modal açılmadan önce demo kontrolü yapılıyor; demo ise paywall göster.
   function handleOpenAddModal() {
-    if (isDemoUser) {
-      setPaywallOpen(true)
-      return
-    }
     setAddOpen(true)
   }
 
   return (
     <div className="p-4 md:p-6">
 
-      {/* ── Demo Paywall Modal ─────────────────────────────────────────────── */}
-      <DemoPaywallModal
-        isOpen={paywallOpen}
-        onClose={() => setPaywallOpen(false)}
-      />
       {/* ──────────────────────────────────────────────────────────────────── */}
 
       {/* Demo banner — sadece demo kullanıcıya gösterilir */}
-      {isDemoUser && (
-        <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <span className="text-base leading-none mt-0.5">🔒</span>
-          <p className="text-sm text-amber-800">
-            <span className="font-semibold">Demo modundasınız.</span> Danışan ekleyemez veya
-            güncelleyemezsiniz.{' '}
-            <button
-              onClick={() => setPaywallOpen(true)}
-              className="font-semibold underline underline-offset-2 hover:no-underline"
-            >
-              Tam sürümü başlatın →
-            </button>
-          </p>
-        </div>
-      )}
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
@@ -201,10 +157,7 @@ export default function ClientsClient({ clients: initial, profileSlug }: Props) 
             onClick={handleOpenAddModal}
             className="btn-primary flex items-center gap-1.5"
           >
-            {isDemoUser
-              ? <><span className="text-xs">🔒</span> Yeni Danışan</>
-              : <><UserPlus size={14} /> Yeni Danışan</>
-            }
+            <><UserPlus size={14} /> Yeni Danışan</>
           </button>
         </div>
       </div>

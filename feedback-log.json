@@ -1,0 +1,15 @@
+{
+  "type": "general",
+  "subject": "Test",
+  "message": "Test message",
+  "timestamp": "2026-03-23T21:22:33.248Z",
+  "id": "1774300953248"
+}
+{
+  "type": "other",
+  "subject": "deneme",
+  "message": "deneme",
+  "email": "",
+  "timestamp": "2026-03-23T21:23:40.773Z",
+  "id": "1774301020773"
+}

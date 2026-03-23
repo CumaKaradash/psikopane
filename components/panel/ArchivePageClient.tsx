@@ -6,17 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { tr } from 'date-fns/locale'
 import toast from 'react-hot-toast'
-import {
-  UploadCloud, Link2, FileText, FileImage, File as FileIcon,
-  Trash2, Download, ExternalLink, Search, Eye, X,
-  FlaskConical, BookOpen, Users, ChevronDown, ChevronUp,
-  Loader2, CheckCircle2,
-} from 'lucide-react'
+import { UploadCloud, Link2, FileText, FileImage, File as FileIcon, Trash2, Download, ExternalLink, Search, Eye, FlaskConical, BookOpen, Users, Loader2 } from 'lucide-react'
 
-// ── Demo Paywall entegrasyonu ─────────────────────────────────────────────────
-import { useDemoUser }  from '@/hooks/useDemoUser'
-import DemoPaywallModal from '@/components/panel/DemoPaywallModal'
-// ─────────────────────────────────────────────────────────────────────────────
 
 interface DbFile {
   id: string; psychologist_id: string; file_name: string
@@ -84,19 +75,9 @@ export default function ArchivePageClient({ userId, files: initialFiles, testRes
   const [deleting, setDeleting] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // ── Demo Paywall state ──────────────────────────────────────────────────────
-  const { isDemoUser }                = useDemoUser()
-  const [paywallOpen, setPaywallOpen] = useState(false)
-
-  function guardDemo(): boolean {
-    if (isDemoUser) { setPaywallOpen(true); return true }
-    return false
-  }
-  // ───────────────────────────────────────────────────────────────────────────
 
   // ── Dosya yükle ──────────────────────────────────────────────────────────
   const uploadFiles = useCallback(async (fileList: FileList | File[]) => {
-    if (isDemoUser) { setPaywallOpen(true); return }  // 🔒 Demo engeli
     const arr = Array.from(fileList)
     if (arr.some(f => f.size > 15 * 1024 * 1024)) { toast.error('Maks. dosya boyutu 15 MB'); return }
 
@@ -140,7 +121,6 @@ export default function ArchivePageClient({ userId, files: initialFiles, testRes
 
   // ── Dosya sil ────────────────────────────────────────────────────────────
   async function deleteFile(f: DbFile) {
-    if (guardDemo()) return  // 🔒
     if (!confirm(`"${f.file_name}" silinecek. Emin misiniz?`)) return
     setDeleting(f.id)
     try {
@@ -156,7 +136,6 @@ export default function ArchivePageClient({ userId, files: initialFiles, testRes
 
   // ── Takıma Aç / Kapat ────────────────────────────────────────────────────
   async function toggleTeamShared(f: DbFile) {
-    if (guardDemo()) return  // 🔒
     const newVal = !(f.team_shared ?? false)
     try {
       const { error } = await supabase.from('files')
@@ -188,7 +167,6 @@ export default function ArchivePageClient({ userId, files: initialFiles, testRes
 
   // ── URL ekle ─────────────────────────────────────────────────────────────
   async function addUrl() {
-    if (guardDemo()) return  // 🔒
     const url = newUrl.trim()
     if (!url) { toast.error('URL zorunlu'); return }
     if (!/^https?:\/\//.test(url)) { toast.error('URL http:// veya https:// ile başlamalı'); return }
@@ -214,7 +192,6 @@ export default function ArchivePageClient({ userId, files: initialFiles, testRes
   }
 
   async function deleteUrl(id: string) {
-    if (guardDemo()) return  // 🔒
     if (!confirm('Bu URL silinecek. Emin misiniz?')) return
     await supabase.from('files').delete().eq('id', id)
     setUrls(us => us.filter(u => u.id !== id))
@@ -232,23 +209,7 @@ export default function ArchivePageClient({ userId, files: initialFiles, testRes
   return (
     <div className="p-4 md:p-6 space-y-5">
 
-      {/* ── Demo Paywall Modal ─────────────────────────────────────────────── */}
-      <DemoPaywallModal isOpen={paywallOpen} onClose={() => setPaywallOpen(false)} />
 
-      {/* ── Demo Banner ───────────────────────────────────────────────────── */}
-      {isDemoUser && (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <span className="text-base leading-none mt-0.5">🔒</span>
-          <p className="text-sm text-amber-800">
-            <span className="font-semibold">Demo modundasınız.</span>{' '}
-            Sisteme yeni dosya yükleyemez veya silemezsiniz.{' '}
-            <button onClick={() => setPaywallOpen(true)}
-              className="font-semibold underline underline-offset-2 hover:no-underline">
-              Tam sürümü başlatın →
-            </button>
-          </p>
-        </div>
-      )}
 
       {/* Arama */}
       <div className="relative max-w-sm">

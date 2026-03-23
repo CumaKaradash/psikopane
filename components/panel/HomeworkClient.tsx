@@ -4,13 +4,9 @@
 import { toSlug } from '@/lib/utils'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
-import { Lock, Users } from 'lucide-react'
+import { Users } from 'lucide-react'
 import type { Homework } from '@/lib/types'
 
-// ── Demo Paywall entegrasyonu ─────────────────────────────────────────────────
-import { useDemoUser }  from '@/hooks/useDemoUser'
-import DemoPaywallModal from '@/components/panel/DemoPaywallModal'
-// ─────────────────────────────────────────────────────────────────────────────
 
 type HomeworkWithCount = Homework & { responses?: { count: number }[]; team_shared?: boolean }
 
@@ -27,15 +23,6 @@ export default function HomeworkClient({ homework: initial, profileSlug }: Props
   const [questions, setQuestions] = useState<string[]>([''])
   const [form, setForm] = useState({ title: '', slug: '', description: '', due_date: '' })
 
-  // ── Demo Paywall state ──────────────────────────────────────────────────────
-  const { isDemoUser }                = useDemoUser()
-  const [paywallOpen, setPaywallOpen] = useState(false)
-
-  function guardDemo(): boolean {
-    if (isDemoUser) { setPaywallOpen(true); return true }
-    return false
-  }
-  // ───────────────────────────────────────────────────────────────────────────
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
 
@@ -46,7 +33,6 @@ export default function HomeworkClient({ homework: initial, profileSlug }: Props
 
   // ── Aktif/Pasif toggle ────────────────────────────────────────────────────
   async function toggleActive(id: string, current: boolean) {
-    if (guardDemo()) return  // 🔒
     const res = await fetch('/api/homework', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, is_active: !current }),
@@ -61,7 +47,6 @@ export default function HomeworkClient({ homework: initial, profileSlug }: Props
 
   // ── Sil ──────────────────────────────────────────────────────────────────
   async function deleteHw(id: string) {
-    if (guardDemo()) return  // 🔒
     if (!confirm('Bu ödevi silmek istediğinize emin misiniz?')) return
     const res = await fetch(`/api/homework?id=${id}`, { method: 'DELETE' })
     if (res.ok) {
@@ -74,7 +59,6 @@ export default function HomeworkClient({ homework: initial, profileSlug }: Props
 
   // ── Takım paylaşım toggle ─────────────────────────────────────────────────
   async function toggleTeamShared(id: string, current: boolean) {
-    if (guardDemo()) return  // 🔒
     const res = await fetch('/api/homework', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, team_shared: !current }),
@@ -90,7 +74,6 @@ export default function HomeworkClient({ homework: initial, profileSlug }: Props
   // ── Yeni ödev ────────────────────────────────────────────────────────────
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
-    if (guardDemo()) return  // 🔒
     if (!form.title || !form.slug) { toast.error('Başlık ve URL zorunlu'); return }
     setLoading(true)
     try {
@@ -120,34 +103,17 @@ export default function HomeworkClient({ homework: initial, profileSlug }: Props
 
   // ── "Yeni Ödev" butonuna tıklanınca ───────────────────────────────────────
   function handleOpenAddModal() {
-    if (guardDemo()) return  // 🔒
     setAddOpen(true)
   }
 
   return (
     <div className="p-6">
 
-      {/* ── Demo Paywall Modal ───────────────────────────────────────────────── */}
-      <DemoPaywallModal isOpen={paywallOpen} onClose={() => setPaywallOpen(false)} />
 
-      {/* ── Demo Banner ─────────────────────────────────────────────────────── */}
-      {isDemoUser && (
-        <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <span className="text-base leading-none mt-0.5">🔒</span>
-          <p className="text-sm text-amber-800">
-            <span className="font-semibold">Demo modundasınız.</span>{' '}
-            Yeni ödev oluşturamaz veya silemezsiniz.{' '}
-            <button onClick={() => setPaywallOpen(true)}
-              className="font-semibold underline underline-offset-2 hover:no-underline">
-              Tam sürümü başlatın →
-            </button>
-          </p>
-        </div>
-      )}
 
       <div className="flex justify-end mb-5">
         <button onClick={handleOpenAddModal} className="btn-accent flex items-center gap-1.5">
-          {isDemoUser ? <><Lock size={13} /> Yeni Ödev</> : '+ Yeni Ödev'}
+          '+ Yeni Ödev'
         </button>
       </div>
 
@@ -207,7 +173,7 @@ export default function HomeworkClient({ homework: initial, profileSlug }: Props
 
         <button onClick={handleOpenAddModal}
           className="border-2 border-dashed border-border rounded-xl p-5 flex flex-col items-center justify-center gap-2 text-muted hover:border-accent hover:text-accent transition-colors min-h-[160px]">
-          {isDemoUser ? <Lock size={22} className="opacity-50" /> : <span className="text-3xl">+</span>}
+          <span className="text-3xl">+</span>
           <span className="text-sm font-medium">Yeni Ödev</span>
         </button>
       </div>

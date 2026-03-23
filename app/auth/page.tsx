@@ -5,26 +5,21 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { Sparkles, Loader2, User, Mail, Lock } from 'lucide-react'
-
-// Demo hesap bilgileri
-const DEMO_EMAIL    = 'demo@psikopanel.com'
-const DEMO_PASSWORD = 'demo123456'
+import { Loader2, User, Mail, Lock } from 'lucide-react'
 
 type TabType = 'login' | 'register'
 
 export default function AuthPage() {
   const [activeTab, setActiveTab] = useState<TabType>('login')
   const [loading, setLoading] = useState(false)
-  const [demoLoading, setDemoLoading] = useState(false)
   const [done, setDone] = useState(false)
-  
+
   // Login form state
   const [loginForm, setLoginForm] = useState({
     email: '',
     password: ''
   })
-  
+
   // Register form state
   const [registerForm, setRegisterForm] = useState({
     email: '',
@@ -39,12 +34,12 @@ export default function AuthPage() {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    
-    const { error } = await supabase.auth.signInWithPassword({ 
-      email: loginForm.email, 
-      password: loginForm.password 
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginForm.email,
+      password: loginForm.password
     })
-    
+
     if (error) {
       toast.error(
         error.message === 'Invalid login credentials'
@@ -54,7 +49,7 @@ export default function AuthPage() {
       setLoading(false)
       return
     }
-    
+
     toast.success('Giriş başarılı!')
     router.refresh()
     router.push('/panel')
@@ -63,24 +58,24 @@ export default function AuthPage() {
   // ── Register Fonksiyonu ───────────────────────────────────────────────────
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault()
-    
+
     if (registerForm.password !== registerForm.confirmPassword) {
       toast.error('Şifreler eşleşmiyor')
       return
     }
-    
+
     if (registerForm.password.length < 6) {
       toast.error('Şifre en az 6 karakter olmalı')
       return
     }
-    
+
     setLoading(true)
     try {
       const { data, error } = await supabase.auth.signUp({
         email: registerForm.email,
         password: registerForm.password,
       })
-      
+
       if (error) throw error
 
       if (data.session) {
@@ -99,32 +94,6 @@ export default function AuthPage() {
       setLoading(false)
     }
   }
-
-  // ── Demo Giriş Fonksiyonu ─────────────────────────────────────────────────
-  async function handleDemoLogin() {
-    setDemoLoading(true)
-    const toastId = toast.loading('Demo hesabı açılıyor…')
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email:    DEMO_EMAIL,
-      password: DEMO_PASSWORD,
-    })
-
-    if (error) {
-      toast.error(
-        'Demo hesabına şu an erişilemiyor. Lütfen daha sonra tekrar deneyin.',
-        { id: toastId }
-      )
-      setDemoLoading(false)
-      return
-    }
-
-    toast.success('Demo hesabına hoş geldiniz! 🎉', { id: toastId })
-    router.refresh()
-    router.push('/panel')
-  }
-
-  const isAnyLoading = loading || demoLoading
 
   // Email doğrulama sonrası ekran
   if (done) {
@@ -187,50 +156,6 @@ export default function AuthPage() {
             </button>
           </div>
 
-          {/* ── Demo Hesap Kartı (her sekmede görünür) ── */}
-          <div className="mb-6 rounded-xl border border-sage-l bg-[#f0f6f2] p-4">
-            <div className="flex items-start gap-3 mb-3">
-              <div className="mt-0.5 flex-shrink-0 w-7 h-7 rounded-full bg-sage flex items-center justify-center">
-                <Sparkles size={13} className="text-white" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-sage-d">Demo Hesabıyla Keşfet</p>
-                <p className="text-xs text-muted mt-0.5 leading-relaxed">
-                  Kayıt olmadan tüm özelliklere göz atın. Gerçek veri girişi kısıtlıdır.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleDemoLogin}
-              disabled={isAnyLoading}
-              className="w-full flex items-center justify-center gap-2 rounded-lg bg-sage text-white
-                         text-sm font-semibold py-2.5 px-4 hover:bg-sage-d active:scale-[0.98]
-                         transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {demoLoading ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  Açılıyor…
-                </>
-              ) : (
-                <>
-                  <Sparkles size={14} />
-                  Demo Hesabını İncele
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* ── Ayırıcı ── */}
-          <div className="relative flex items-center mb-6">
-            <div className="flex-1 border-t border-border" />
-            <span className="mx-3 text-xs text-muted bg-white px-1 flex-shrink-0">
-              {activeTab === 'login' ? 'ya da hesabınızla giriş yapın' : 'ya da yeni hesap oluşturun'}
-            </span>
-            <div className="flex-1 border-t border-border" />
-          </div>
-
           {/* ── Form İçeriği ── */}
           {activeTab === 'login' ? (
             <form onSubmit={handleLogin} className="space-y-4">
@@ -266,7 +191,7 @@ export default function AuthPage() {
               </div>
               <button
                 type="submit"
-                disabled={isAnyLoading}
+                disabled={loading}
                 className="btn-primary w-full justify-center py-3 mt-2
                            disabled:opacity-60 disabled:cursor-not-allowed"
               >
@@ -330,7 +255,7 @@ export default function AuthPage() {
               </div>
               <button
                 type="submit"
-                disabled={isAnyLoading}
+                disabled={loading}
                 className="btn-primary w-full justify-center py-3 mt-2
                            disabled:opacity-60 disabled:cursor-not-allowed"
               >

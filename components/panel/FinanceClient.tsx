@@ -7,10 +7,6 @@ import type { FinanceEntry } from '@/lib/types'
 import { Pencil, Trash2, Plus, Check, X, Download, BarChart2, List } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
-// ── Demo Paywall entegrasyonu ─────────────────────────────────────────────────
-import { useDemoUser }  from '@/hooks/useDemoUser'
-import DemoPaywallModal from '@/components/panel/DemoPaywallModal'
-// ─────────────────────────────────────────────────────────────────────────────
 
 interface Props {
   entries:      FinanceEntry[]
@@ -34,15 +30,6 @@ export default function FinanceClient({ entries: initial, income, expense, curre
   const [exportLoading, setExportLoading] = useState(false)
   const [view,         setView]         = useState<'list' | 'chart'>('list')
 
-  // ── Demo Paywall state ──────────────────────────────────────────────────────
-  const { isDemoUser }                = useDemoUser()
-  const [paywallOpen, setPaywallOpen] = useState(false)
-
-  function guardDemo(): boolean {
-    if (isDemoUser) { setPaywallOpen(true); return true }
-    return false
-  }
-  // ───────────────────────────────────────────────────────────────────────────
 
   const net = localIncome - localExpense
 
@@ -54,7 +41,6 @@ export default function FinanceClient({ entries: initial, income, expense, curre
   // ── Ekle ─────────────────────────────────────────────────────────────────
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
-    if (guardDemo()) return  // 🔒 Demo engeli
 
     if (!form.amount || !form.description) { toast.error('Tutar ve açıklama zorunlu'); return }
     const amt = parseFloat(form.amount)
@@ -78,14 +64,12 @@ export default function FinanceClient({ entries: initial, income, expense, curre
 
   // ── Düzenle aç ───────────────────────────────────────────────────────────
   function openEdit(e: FinanceEntry) {
-    if (guardDemo()) return  // 🔒 Demo engeli
     setEditId(e.id)
     setEditForm({ type: e.type, amount: String(e.amount), description: e.description, entry_date: e.entry_date })
   }
 
   // ── Düzenle kaydet ───────────────────────────────────────────────────────
   async function handleEdit(id: string) {
-    if (guardDemo()) return  // 🔒 Demo engeli
 
     const amt = parseFloat(editForm.amount)
     if (isNaN(amt) || amt <= 0 || !editForm.description) { toast.error('Geçerli veri girin'); return }
@@ -107,7 +91,6 @@ export default function FinanceClient({ entries: initial, income, expense, curre
 
   // ── Sil ──────────────────────────────────────────────────────────────────
   async function handleDelete(id: string) {
-    if (guardDemo()) return  // 🔒 Demo engeli
 
     if (!confirm('Bu işlemi silmek istediğinize emin misiniz?')) return
     const res = await fetch(`/api/finance?id=${id}`, { method: 'DELETE' })
@@ -120,7 +103,6 @@ export default function FinanceClient({ entries: initial, income, expense, curre
 
   // ── "İşlem Ekle" butonuna tıklanınca ──────────────────────────────────────
   function handleOpenAddModal() {
-    if (guardDemo()) return  // 🔒 Demo engeli
     setAddOpen(true)
   }
 
@@ -138,7 +120,6 @@ export default function FinanceClient({ entries: initial, income, expense, curre
 
   // ── CSV Dışa Aktar ────────────────────────────────────────────────────────
   async function handleExport() {
-    if (guardDemo()) return
     setExportLoading(true)
     try {
       const url = `/api/finance/export?month=${currentMonth}`
@@ -161,25 +142,7 @@ export default function FinanceClient({ entries: initial, income, expense, curre
   return (
     <div className="p-4 md:p-6">
 
-      {/* ── Demo Paywall Modal ───────────────────────────────────────────────── */}
-      <DemoPaywallModal isOpen={paywallOpen} onClose={() => setPaywallOpen(false)} />
 
-      {/* ── Demo Banner ─────────────────────────────────────────────────────── */}
-      {isDemoUser && (
-        <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <span className="text-base leading-none mt-0.5">🔒</span>
-          <p className="text-sm text-amber-800">
-            <span className="font-semibold">Demo modundasınız.</span>{' '}
-            Gelir/gider ekleyemez, düzenleyemez veya silemezsiniz.{' '}
-            <button
-              onClick={() => setPaywallOpen(true)}
-              className="font-semibold underline underline-offset-2 hover:no-underline"
-            >
-              Tam sürümü başlatın →
-            </button>
-          </p>
-        </div>
-      )}
 
       {/* Özet kartlar */}
       <div className="grid grid-cols-3 gap-4 mb-6">
@@ -221,10 +184,7 @@ export default function FinanceClient({ entries: initial, income, expense, curre
               {view === 'list' ? <><BarChart2 size={13} /> Grafik</> : <><List size={13} /> Liste</>}
             </button>
             <button onClick={handleOpenAddModal} className="btn-primary flex items-center gap-1.5">
-            {isDemoUser
-              ? <><span className="text-xs">🔒</span> İşlem Ekle</>
-              : <><Plus size={14} /> İşlem Ekle</>
-            }
+            <><Plus size={14} /> İşlem Ekle</>
           </button>
           </div>
         </div>

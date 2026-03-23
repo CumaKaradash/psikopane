@@ -8,10 +8,6 @@ import toast from 'react-hot-toast'
 import { localDateKey } from '@/lib/utils'
 import { Check, X, Clock, CheckCircle2, Calendar, Plus, ChevronRight, UserPlus } from 'lucide-react'
 
-// ── Demo Paywall entegrasyonu ─────────────────────────────────────────────────
-import { useDemoUser }  from '@/hooks/useDemoUser'
-import DemoPaywallModal from '@/components/panel/DemoPaywallModal'
-// ─────────────────────────────────────────────────────────────────────────────
 import { createClient } from '@/lib/supabase/client'
 
 interface Appt {
@@ -61,15 +57,6 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
   const [noteSaving,      setNoteSaving]      = useState(false)
   const [noteLoaded,      setNoteLoaded]      = useState<string | null>(null)
 
-  // ── Demo Paywall state ──────────────────────────────────────────────────────
-  const { isDemoUser }              = useDemoUser()
-  const [paywallOpen, setPaywallOpen] = useState(false)
-
-  function guardDemo(): boolean {
-    if (isDemoUser) { setPaywallOpen(true); return true }
-    return false
-  }
-  // ───────────────────────────────────────────────────────────────────────────
 
   // ── Supabase Realtime: randevu değişikliklerini canlı dinle ──────────────
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null)
@@ -127,7 +114,6 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
       .then(d => { setSessionNote(d.content ?? ''); setNoteLoaded(detailAppt.id) })
       .catch(() => {})
   }, [detailAppt?.id])
-  // ─────────────────────────────────────────────────────────────────────────
 
   async function saveSessionNote() {
     if (!detailAppt) return
@@ -164,7 +150,6 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
 
   // ── Randevu durumunu güncelle ─────────────────────────────────────────────
   async function updateStatus(id: string, status: string, price?: number) {
-    if (guardDemo()) return  // 🔒 Demo engeli
 
     const body: Record<string, unknown> = { id, status }
     if (price !== undefined && price > 0) body.price = price
@@ -201,7 +186,6 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
   // ── Randevu ekle ──────────────────────────────────────────────────────────
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
-    if (guardDemo()) return  // 🔒 Demo engeli
 
     if (!form.guest_name || !form.starts_at) { toast.error('İsim ve saat zorunlu'); return }
     setLoading(true)
@@ -233,7 +217,6 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
 
   // ── Danışan olarak kaydet ─────────────────────────────────────────────────────
   async function saveAsClient(appointment: Appt) {
-    if (guardDemo()) return  // 🔒 Demo engeli
 
     if (!appointment.guest_name) { toast.error('Danışan adı bulunamadı'); return }
     setLoading(true)
@@ -283,7 +266,6 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
 
   // ── "Randevu Ekle" butonuna tıklanınca ────────────────────────────────────
   function handleOpenAddModal() {
-    if (guardDemo()) return  // 🔒 Demo engeli
     setAddOpen(true)
   }
 
@@ -388,25 +370,7 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
   return (
     <div className="p-3 md:p-6">
 
-      {/* ── Demo Paywall Modal ───────────────────────────────────────────────── */}
-      <DemoPaywallModal isOpen={paywallOpen} onClose={() => setPaywallOpen(false)} />
 
-      {/* ── Demo Banner ─────────────────────────────────────────────────────── */}
-      {isDemoUser && (
-        <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <span className="text-base leading-none mt-0.5">🔒</span>
-          <p className="text-sm text-amber-800">
-            <span className="font-semibold">Demo modundasınız.</span>{' '}
-            Randevu ekleyemez veya güncelleyemezsiniz.{' '}
-            <button
-              onClick={() => setPaywallOpen(true)}
-              className="font-semibold underline underline-offset-2 hover:no-underline"
-            >
-              Tam sürümü başlatın →
-            </button>
-          </p>
-        </div>
-      )}
 
       {/* Mobil tab */}
       <div className="flex md:hidden gap-1 mb-4 bg-cream rounded-xl p-1">
@@ -476,10 +440,7 @@ export default function CalendarClient({ appointments, todayAppts, pendingAppts,
             onClick={handleOpenAddModal}
             className="btn-primary w-full justify-center flex items-center gap-1.5"
           >
-            {isDemoUser
-              ? <><span className="text-xs">🔒</span> Randevu Ekle</>
-              : <><Plus size={15} /> Randevu Ekle</>
-            }
+            <><Plus size={15} /> Randevu Ekle</>
           </button>
           {(mobileTab === 'pending' || mobileTab === 'calendar') && <PendingPanel />}
           {(mobileTab === 'today'   || mobileTab === 'calendar') && <TodayPanel />}

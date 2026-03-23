@@ -1,5 +1,34 @@
 import { NextResponse } from 'next/server'
 import { checkRateLimit, RATE_PRESETS } from '@/lib/rate-limit'
+import { writeFile } from 'fs/promises'
+import { join } from 'path'
+
+// ── Geri bildirim kaydetme (e-posta başarısız olursa) ─────────────────────────────
+async function saveFeedbackToFile(opts: {
+  type: string
+  subject: string
+  message: string
+  email?: string
+}) {
+  try {
+    const feedbackData = {
+      ...opts,
+      timestamp: new Date().toISOString(),
+      id: Date.now().toString()
+    }
+    
+    const filePath = join(process.cwd(), 'feedback-log.json')
+    const logEntry = JSON.stringify(feedbackData, null, 2) + '\n'
+    
+    await writeFile(filePath, logEntry, { flag: 'a' })
+    console.log('Feedback saved to file:', filePath)
+    
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to save feedback to file:', error)
+    return { success: false, error: 'Geri bildirim kaydedilemedi' }
+  }
+}
 
 // ── Geri bildirim e-posta gönderici (Resend) ───────────────────────────────────
 async function sendFeedbackEmail(opts: {
@@ -14,7 +43,7 @@ async function sendFeedbackEmail(opts: {
   
   if (!key) {
     console.error('RESEND_API_KEY not configured')
-    return false
+    return { success: false, error: 'E-posta servisi yapılandırılmamış' }
   }
 
   const typeLabels = {
@@ -105,13 +134,19 @@ async function sendFeedbackEmail(opts: {
     if (!response.ok) {
       const error = await response.text()
       console.error('Resend API error:', error)
-      return false
+      
+      // Parse Resend error for better user feedback
+      if (error.includes('domain')) {
+        return { success: false, error: 'E-posta domain doğrulanmamış. Lütfen Resend hesabınızda domain ekleyin.' }
+      }
+      
+      return { success: false, error: 'E-posta gönderilemedi' }
     }
 
-    return true
+    return { success: true }
   } catch (error) {
     console.error('Error sending feedback email:', error)
-    return false
+    return { success: false, error: 'E-posta gönderilemedi' }
   }
 }
 
@@ -164,16 +199,27 @@ export async function POST(req: Request) {
     console.log('Validation passed, sending email...')
     
     // Send email
-    const emailSent = await sendFeedbackEmail({ type, subject, message, email })
+    const emailResult = await sendFeedbackEmail({ type, subject, message, email })
     
-    console.log('Email sent result:', emailSent)
+    console.log('Email sent result:', emailResult)
 
-    if (!emailSent) {
-      console.log('Email sending failed')
-      return NextResponse.json(
-        { error: 'E-posta gönderilemedi. Lütfen daha sonra tekrar deneyin.' }, 
-        { status: 500 }
-      )
+    if (!emailResult.success) {
+      console.log('Email sending failed:', emailResult.error)
+      
+      // Fallback: Save to file
+      const fileResult = await saveFeedbackToFile({ type, subject, message, email })
+      
+      if (fileResult.success) {
+        return NextResponse.json({ 
+          success: true, 
+          message: 'Geri bildiriminiz kaydedildi (e-posta servisi geçici olarak kullanılamıyor)' 
+        })
+      } else {
+        return NextResponse.json(
+          { error: 'Geri bildirim gönderilemedi ve kaydedilemedi' }, 
+          { status: 500 }
+        )
+      }
     }
 
     const response = NextResponse.json({ 

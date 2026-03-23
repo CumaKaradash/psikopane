@@ -4,17 +4,10 @@
 import { toSlug } from '@/lib/utils'
 import { useState, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
-import {
-  User, Link2, FileText, DollarSign,
-  Plus, Trash2, Save, Eye, Camera, Lock, Users,
-} from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { User, Link2, FileText, DollarSign, Plus, Trash2, Save, Eye, Camera, Users } from 'lucide-react'
 import type { Profile } from '@/lib/types'
 
-// ── Demo Paywall entegrasyonu ─────────────────────────────────────────────────
-import { useDemoUser }  from '@/hooks/useDemoUser'
-import DemoPaywallModal from '@/components/panel/DemoPaywallModal'
-import { createClient } from '@/lib/supabase/client'
-// ─────────────────────────────────────────────────────────────────────────────
 
 interface Props { profile: Profile }
 
@@ -162,16 +155,6 @@ export default function SettingsClient({ profile: initial }: Props) {
   const [loading, setLoading] = useState(false)
   const [saved,   setSaved]   = useState(false)
 
-  // ── Demo Paywall state ──────────────────────────────────────────────────────
-  const { isDemoUser }                = useDemoUser()
-  const [paywallOpen, setPaywallOpen] = useState(false)
-
-  /** true dönerse çağıran fonksiyon return etmeli */
-  function guardDemo(): boolean {
-    if (isDemoUser) { setPaywallOpen(true); return true }
-    return false
-  }
-  // ───────────────────────────────────────────────────────────────────────────
 
   // Form alanları
   const [fullName,  setFullName]  = useState(initial.full_name  ?? '')
@@ -194,12 +177,10 @@ export default function SettingsClient({ profile: initial }: Props) {
   )
 
   function addSessionType() {
-    if (guardDemo()) return   // 🔒
     setSessionTypes(s => [...s, { name: '', price: '' }])
   }
 
   function removeSessionType(i: number) {
-    if (guardDemo()) return   // 🔒
     setSessionTypes(s => s.filter((_, idx) => idx !== i))
   }
 
@@ -211,7 +192,6 @@ export default function SettingsClient({ profile: initial }: Props) {
 
   // ── Fotoğraf yükle ───────────────────────────────────────────────────────
   async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    if (guardDemo()) return
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) { toast.error('Yalnızca resim dosyası yükleyebilirsiniz'); return }
@@ -240,7 +220,6 @@ export default function SettingsClient({ profile: initial }: Props) {
 
   // ── Profili kaydet ────────────────────────────────────────────────────────
   async function handleSave() {
-    if (guardDemo()) return   // 🔒 Demo engeli
 
     // Avatar URL doğrulama — javascript: / data: URI'larına izin verme
     if (avatarUrl && avatarUrl.trim()) {
@@ -308,25 +287,7 @@ export default function SettingsClient({ profile: initial }: Props) {
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
 
-      {/* ── Demo Paywall Modal ───────────────────────────────────────────────── */}
-      <DemoPaywallModal isOpen={paywallOpen} onClose={() => setPaywallOpen(false)} />
 
-      {/* ── Demo Banner ─────────────────────────────────────────────────────── */}
-      {isDemoUser && (
-        <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <Lock size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-800">
-            <span className="font-semibold">Demo modundasınız.</span>{' '}
-            Profil bilgilerini kaydedebilir, seans türlerini veya görünüm ayarlarını güncelleyemezsiniz.{' '}
-            <button
-              onClick={() => setPaywallOpen(true)}
-              className="font-semibold underline underline-offset-2 hover:no-underline"
-            >
-              Tam sürümü başlatın →
-            </button>
-          </p>
-        </div>
-      )}
 
       {/* Profil önizleme kartı */}
       <div className="card p-5 mb-6 flex items-center gap-4">
@@ -432,7 +393,7 @@ export default function SettingsClient({ profile: initial }: Props) {
               <label className="label mb-0">Seans Türleri</label>
               <button onClick={addSessionType}
                 className="btn-outline py-1 px-2.5 text-xs flex items-center gap-1">
-                {isDemoUser ? <><Lock size={11} /> Ekle</> : <><Plus size={12} /> Ekle</>}
+                <><Plus size={12} /> Ekle</>
               </button>
             </div>
 
@@ -515,7 +476,7 @@ export default function SettingsClient({ profile: initial }: Props) {
                 />
                 <button
                   type="button"
-                  onClick={() => { if (guardDemo()) return; avatarInputRef.current?.click() }}
+                  onClick={() => { avatarInputRef.current?.click() }}
                   disabled={avatarUploading}
                   className="btn-outline w-full justify-center disabled:opacity-60"
                 >
@@ -546,10 +507,7 @@ export default function SettingsClient({ profile: initial }: Props) {
             disabled={loading}
             className="btn-primary px-6 py-2.5 flex items-center gap-2 disabled:opacity-60"
           >
-            {isDemoUser
-              ? <><Lock size={14} /> Kaydet (Demo Kısıtlı)</>
-              : <><Save size={15} /> {loading ? 'Kaydediliyor…' : 'Değişiklikleri Kaydet'}</>
-            }
+            <><Save size={15} /> {loading ? 'Kaydediliyor…' : 'Değişiklikleri Kaydet'}</>
           </button>
         </div>
       )}

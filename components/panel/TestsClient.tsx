@@ -8,10 +8,6 @@ import { Download, Upload, Globe, Lock, Users } from 'lucide-react'
 import type { Test } from '@/lib/types'
 import QuizApp from '@/components/panel/QuizApp'
 
-// ── Demo Paywall entegrasyonu ─────────────────────────────────────────────────
-import { useDemoUser }  from '@/hooks/useDemoUser'
-import DemoPaywallModal from '@/components/panel/DemoPaywallModal'
-// ─────────────────────────────────────────────────────────────────────────────
 
 type TestWithCount = Test & {
   responses?: { count: number }[]
@@ -33,15 +29,6 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
   const [quizTestId, setQuizTestId] = useState<string | null>(null)
   const importRef                   = useRef<HTMLInputElement>(null)
 
-  // ── Demo Paywall state ──────────────────────────────────────────────────────
-  const { isDemoUser }                = useDemoUser()
-  const [paywallOpen, setPaywallOpen] = useState(false)
-
-  function guardDemo(): boolean {
-    if (isDemoUser) { setPaywallOpen(true); return true }
-    return false
-  }
-  // ───────────────────────────────────────────────────────────────────────────
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
 
@@ -69,10 +56,6 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
 
   // ── JSON İçe Aktar ────────────────────────────────────────────────────────
   function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
-    if (guardDemo()) {                              // 🔒 Demo engeli
-      if (importRef.current) importRef.current.value = ''
-      return
-    }
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
@@ -108,7 +91,6 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
 
   // ── is_active toggle ──────────────────────────────────────────────────────
   async function toggleActive(id: string, current: boolean) {
-    if (guardDemo()) return  // 🔒
     const res = await fetch('/api/tests', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, is_active: !current }),
@@ -121,7 +103,6 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
 
   // ── is_public toggle ──────────────────────────────────────────────────────
   async function togglePublic(id: string, current: boolean) {
-    if (guardDemo()) return  // 🔒
     const res = await fetch('/api/tests', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, is_public: !current }),
@@ -134,7 +115,6 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
 
   // ── team_shared toggle ────────────────────────────────────────────────────
   async function toggleTeamShared(id: string, current: boolean) {
-    if (guardDemo()) return  // 🔒
     const res = await fetch('/api/tests', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, team_shared: !current }),
@@ -147,7 +127,6 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
 
   // ── Sil ──────────────────────────────────────────────────────────────────
   async function deleteTest(id: string) {
-    if (guardDemo()) return  // 🔒
     if (!confirm('Bu testi silmek istediğinize emin misiniz?')) return
     const res = await fetch(`/api/tests?id=${id}`, { method: 'DELETE' })
     if (res.ok) { setTests(ts => ts.filter(t => t.id !== id)); toast.success('Silindi') }
@@ -167,7 +146,6 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
   // ── "Boş Oluştur" (form submit) ───────────────────────────────────────────
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
-    if (guardDemo()) return  // 🔒
     if (!form.title || !form.slug) { toast.error('Başlık ve URL zorunlu'); return }
     setLoading(true)
     try {
@@ -185,42 +163,25 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
 
   // ── "Yeni Test" butonuna tıklanınca ───────────────────────────────────────
   function handleOpenAddModal() {
-    if (guardDemo()) return  // 🔒
     setAddOpen(true)
   }
 
   return (
     <div className="p-4 md:p-6">
 
-      {/* ── Demo Paywall Modal ───────────────────────────────────────────────── */}
-      <DemoPaywallModal isOpen={paywallOpen} onClose={() => setPaywallOpen(false)} />
 
-      {/* ── Demo Banner ─────────────────────────────────────────────────────── */}
-      {isDemoUser && (
-        <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <span className="text-base leading-none mt-0.5">🔒</span>
-          <p className="text-sm text-amber-800">
-            <span className="font-semibold">Demo modundasınız.</span>{' '}
-            Yeni test oluşturamaz, içe aktaramaz veya silemezsiniz.{' '}
-            <button onClick={() => setPaywallOpen(true)}
-              className="font-semibold underline underline-offset-2 hover:no-underline">
-              Tam sürümü başlatın →
-            </button>
-          </p>
-        </div>
-      )}
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 mb-5 justify-end">
         <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
         <button
-          onClick={() => { if (guardDemo()) return; importRef.current?.click() }}
+          onClick={() => { importRef.current?.click() }}
           className="btn-outline flex items-center gap-1.5 text-xs"
         >
-          {isDemoUser ? <><Lock size={12} /> JSON ile İçe Aktar</> : <><Upload size={14} /> JSON ile İçe Aktar</>}
+          <><Upload size={14} /> JSON ile İçe Aktar</>
         </button>
         <button onClick={handleOpenAddModal} className="btn-primary flex items-center gap-1.5">
-          {isDemoUser ? <><Lock size={13} /> Yeni Test</> : '+ Yeni Test'}
+          '+ Yeni Test'
         </button>
       </div>
 
@@ -289,7 +250,7 @@ export default function TestsClient({ tests: initial, profileSlug }: Props) {
 
         <button onClick={handleOpenAddModal}
           className="border-2 border-dashed border-border rounded-xl p-5 flex flex-col items-center justify-center gap-2 text-muted hover:border-sage hover:text-sage transition-colors min-h-[160px]">
-          {isDemoUser ? <Lock size={22} className="opacity-50" /> : <span className="text-3xl">+</span>}
+          <span className="text-3xl">+</span>
           <span className="text-sm font-medium">Yeni Test</span>
         </button>
       </div>
