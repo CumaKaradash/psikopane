@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hesabınızı Onaylayın – PsikoPanel</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f5f3ef;
+      color: #2c2c2c;
+      padding: 40px 16px;
+    }
+    .wrapper {
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    .logo-area {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .logo-area .logo-box {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-icon {
+      width: 38px;
+      height: 38px;
+      background: #3d5a4a;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .logo-text {
+      font-size: 20px;
+      font-weight: 700;
+      color: #2c2c2c;
+      letter-spacing: -0.3px;
+    }
+    .card {
+      background: #ffffff;
+      border-radius: 16px;
+      border: 1px solid #e8e4de;
+      overflow: hidden;
+    }
+    .card-header {
+      background: #3d5a4a;
+      padding: 36px 40px 32px;
+      text-align: center;
+    }
+    .card-header h1 {
+      color: #ffffff;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+      margin-bottom: 6px;
+    }
+    .card-header p {
+      color: rgba(255,255,255,0.75);
+      font-size: 14px;
+    }
+    .card-body {
+      padding: 36px 40px;
+    }
+    .card-body p {
+      font-size: 15px;
+      color: #4a4a4a;
+      line-height: 1.65;
+      margin-bottom: 16px;
+    }
+    .btn-confirm {
+      display: block;
+      width: 100%;
+      background: #3d5a4a;
+      color: #ffffff !important;
+      text-decoration: none;
+      text-align: center;
+      padding: 15px 24px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      margin: 28px 0 20px;
+      transition: opacity 0.15s;
+    }
+    .btn-confirm:hover { opacity: 0.88; }
+    .link-fallback {
+      font-size: 12px;
+      color: #8a8a8a;
+      text-align: center;
+      line-height: 1.6;
+    }
+    .link-fallback a {
+      color: #3d5a4a;
+      word-break: break-all;
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid #e8e4de;
+      margin: 28px 0;
+    }
+    .notice {
+      background: #f5f3ef;
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-size: 13px;
+      color: #6a6a6a;
+      line-height: 1.55;
+    }
+    .notice strong { color: #3d5a4a; }
+    .footer {
+      text-align: center;
+      margin-top: 28px;
+      font-size: 12px;
+      color: #9a9a9a;
+      line-height: 1.7;
+    }
+    .footer a { color: #3d5a4a; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <!-- Logo -->
+    <div class="logo-area">
+      <div class="logo-box">
+        <span class="logo-text">PsikoPanel</span>
+      </div>
+    </div>
+
+    <!-- Kart -->
+    <div class="card">
+      <div class="card-header">
+        <h1>Hesabınızı Onaylayın</h1>
+        <p>Kayıt işleminizi tamamlamak için e-postanızı doğrulayın</p>
+      </div>
+      <div class="card-body">
+        <p>Merhaba,</p>
+        <p>
+          PsikoPanel'e kaydolduğunuz için teşekkürler. Hesabınızı etkinleştirmek
+          ve platformu kullanmaya başlamak için aşağıdaki butona tıklayın.
+        </p>
+
+        <a href="{{ .ConfirmationURL }}" class="btn-confirm">
+          ✓ Hesabımı Onayla
+        </a>
+
+        <p class="link-fallback">
+          Butona tıklayamıyor musunuz? Aşağıdaki bağlantıyı tarayıcınıza kopyalayın:<br />
+          <a href="{{ .ConfirmationURL }}">{{ .ConfirmationURL }}</a>
+        </p>
+
+        <hr class="divider" />
+
+        <div class="notice">
+          <strong>⏰ Bu bağlantı 24 saat geçerlidir.</strong><br />
+          Eğer PsikoPanel'e kayıt olmadıysanız bu e-postayı güvenle yok sayabilirsiniz.
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <p>Bu e-posta PsikoPanel tarafından gönderilmiştir.</p>
+      <p style="margin-top: 4px;">
+        Sorularınız için <a href="mailto:destek@psikopanel.com">destek@psikopanel.com</a> adresine yazabilirsiniz.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

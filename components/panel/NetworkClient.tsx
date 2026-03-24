@@ -365,7 +365,6 @@ export default function NetworkClient({
             </div>
           )}
 
-          {/* Aktif bağlantılar */}
           <div className="card overflow-hidden">
             <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
               <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -373,6 +372,9 @@ export default function NetworkClient({
                 Bağlantılarım
                 <span className="text-xs text-muted font-normal">({acceptedConns.length})</span>
               </h3>
+              {teams.length > 0 && acceptedConns.length > 0 && (
+                <span className="text-xs text-muted">Takıma davet etmek için üzerine gelin</span>
+              )}
             </div>
             {acceptedConns.length === 0 ? (
               <div className="px-5 py-12 text-center">
@@ -392,8 +394,43 @@ export default function NetworkClient({
                         <p className="text-sm font-semibold truncate">{other?.full_name ?? '—'}</p>
                         <p className="text-xs text-muted truncate">{other?.title ?? ''}</p>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
                         <span className="pill-green hidden sm:inline-flex">Bağlı</span>
+                        {teams.length > 0 && other?.id && (
+                          <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
+                            <select
+                              defaultValue=""
+                              onChange={async (e) => {
+                                const teamId = e.target.value
+                                if (!teamId || !other?.id) return
+                                e.target.value = ''
+                                try {
+                                  const res = await fetch('/api/network', {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ action: 'add_member', team_id: teamId, psychologist_id: other.id }),
+                                  })
+                                  const data = await res.json()
+                                  if (!res.ok) throw new Error(data.error)
+                                  toast.success(`${other.full_name} takıma davet edildi!`)
+                                } catch (err: unknown) {
+                                  toast.error(err instanceof Error ? err.message : 'Davet gönderilemedi')
+                                }
+                              }}
+                              className="text-xs border border-sage text-sage rounded-lg px-2 py-1 pr-6 bg-white appearance-none cursor-pointer hover:bg-sage/5 transition-colors"
+                              title="Takıma davet et"
+                            >
+                              <option value="" disabled>Takıma Davet Et</option>
+                              {teams
+                                .filter(t => t.owner_id === currentUserId)
+                                .filter(t => !(t.members ?? []).some(m => m.psychologist_id === other?.id))
+                                .map(t => (
+                                  <option key={t.id} value={t.id}>{t.name}</option>
+                                ))
+                              }
+                            </select>
+                          </div>
+                        )}
                         <button
                           onClick={() => removeConn(c.id)}
                           className="opacity-0 group-hover:opacity-100 transition-opacity text-muted hover:text-red-500 p-1"

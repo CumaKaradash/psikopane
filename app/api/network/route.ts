@@ -67,6 +67,8 @@ export async function GET() {
   return NextResponse.json({
     sent:     sent     ?? [],
     received: received ?? [],
+    sentConnections:     sent     ?? [],
+    receivedConnections: received ?? [],
     teams:    teams    ?? [],
     teamInvitations: teamInvitations ?? [],
   })
@@ -271,6 +273,60 @@ export async function PATCH(req: Request) {
     }
 
     return NextResponse.json(finalData, { status: statusCode })
+  }
+
+  // ── Takım güncelle ────────────────────────────────────────────────────────
+  if (body.action === 'update_team') {
+    const { team_id, name, description } = body
+    if (!team_id || !name?.trim())
+      return NextResponse.json({ error: 'Eksik alan' }, { status: 400 })
+
+    const { data: team } = await supabase
+      .from('teams')
+      .select('owner_id')
+      .eq('id', team_id)
+      .single()
+
+    if (!team || team.owner_id !== user.id)
+      return NextResponse.json({ error: 'Yalnızca takım sahibi güncelleyebilir' }, { status: 403 })
+
+    const { data, error } = await supabase
+      .from('teams')
+      .update({ name: name.trim(), description: description ?? null })
+      .eq('id', team_id)
+      .select()
+      .single()
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(data)
+  }
+
+  // ── Takımdan üye çıkar ────────────────────────────────────────────────────
+  if (body.action === 'remove_member') {
+    const { team_id, psychologist_id } = body
+    if (!team_id || !psychologist_id)
+      return NextResponse.json({ error: 'Eksik alan' }, { status: 400 })
+
+    const { data: team } = await supabase
+      .from('teams')
+      .select('owner_id')
+      .eq('id', team_id)
+      .single()
+
+    if (!team || team.owner_id !== user.id)
+      return NextResponse.json({ error: 'Yalnızca takım sahibi üye çıkarabilir' }, { status: 403 })
+
+    if (psychologist_id === user.id)
+      return NextResponse.json({ error: 'Kendinizi takımdan çıkaramazsınız' }, { status: 400 })
+
+    const { error } = await supabase
+      .from('team_members')
+      .delete()
+      .eq('team_id', team_id)
+      .eq('psychologist_id', psychologist_id)
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true })
   }
 
   // ── Takım davetini yanıtla ───────────────────────────────────────────────────

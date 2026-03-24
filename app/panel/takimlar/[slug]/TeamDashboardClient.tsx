@@ -13,6 +13,7 @@ import {
   FlaskConical, BookOpen, Search,
   ExternalLink, FileImage,
   Trash2, Check, X, Pencil,
+  Mail, Save, ChevronRight,
 } from 'lucide-react'
 import TeamCalendar from '@/components/panel/TeamCalendar'
 import TeamClients from '@/components/panel/TeamClients'
@@ -597,9 +598,219 @@ function TeamArchive({ teamId, members }: { teamId: string; members: TeamMember[
   )
 }
 
+// ── Ayarlar Modalı ─────────────────────────────────────────────────────────
+function SettingsModal({ team, onClose, onSaved }: {
+  team: Team
+  onClose: () => void
+  onSaved: (updated: Partial<Team>) => void
+}) {
+  const [name, setName]     = useState(team.name)
+  const [desc, setDesc]     = useState(team.description ?? '')
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) { toast.error('Takım adı zorunludur'); return }
+    setSaving(true)
+    try {
+      const res = await fetch('/api/network', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_team', team_id: team.id, name: name.trim(), description: desc.trim() || null }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Hata oluştu')
+      toast.success('Takım bilgileri güncellendi!')
+      onSaved({ name: name.trim(), description: desc.trim() || undefined })
+      onClose()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Kayıt başarısız')
+    } finally { setSaving(false) }
+  }
+
+  async function handleRemoveMember(psychologistId: string, memberName: string) {
+    if (!confirm(`${memberName} takımdan çıkarılsın mı?`)) return
+    try {
+      const res = await fetch('/api/network', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove_member', team_id: team.id, psychologist_id: psychologistId }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+      toast.success(`${memberName} takımdan çıkarıldı`)
+      onSaved({})
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Hata oluştu')
+    }
+  }
+
+  const acceptedNonOwner = team.members?.filter(m => m.status === 'accepted' && m.role !== 'owner') ?? []
+
+  return (
+    <div className="fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+          <h3 className="font-semibold flex items-center gap-2"><Settings size={16} /> Takım Ayarları</h3>
+          <button onClick={onClose} className="text-muted text-2xl leading-none hover:text-charcoal">×</button>
+        </div>
+        <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
+          <form onSubmit={handleSave} className="space-y-4">
+            <h4 className="text-xs font-semibold text-muted uppercase tracking-wide">Takım Bilgileri</h4>
+            <div>
+              <label className="label">Takım Adı *</label>
+              <input className="input" value={name} onChange={e => setName(e.target.value)} required />
+            </div>
+            <div>
+              <label className="label">Açıklama <span className="text-muted font-normal">(opsiyonel)</span></label>
+              <textarea className="input resize-none" rows={2} value={desc} onChange={e => setDesc(e.target.value)} />
+            </div>
+            <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-60">
+              <Save size={14} /> {saving ? 'Kaydediliyor…' : 'Değişiklikleri Kaydet'}
+            </button>
+          </form>
+
+          {acceptedNonOwner.length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold text-muted uppercase tracking-wide mb-3">Üyeleri Yönet</h4>
+              <div className="space-y-2">
+                {acceptedNonOwner.map(m => (
+                  <div key={m.id} className="flex items-center gap-3 p-3 border border-border/60 rounded-lg">
+                    <div className="w-8 h-8 rounded-full bg-sage flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                      {m.profile?.full_name?.charAt(0) ?? '?'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{m.profile?.full_name}</p>
+                      <p className="text-xs text-muted">{m.profile?.title}</p>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveMember(m.psychologist_id, m.profile?.full_name ?? 'Üye')}
+                      className="p-1.5 rounded hover:bg-red-50 text-muted hover:text-red-500 transition-colors"
+                      title="Takımdan çıkar"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="px-6 py-3 border-t border-border">
+          <button onClick={onClose} className="btn-outline w-full justify-center text-sm">Kapat</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Bağlantıdan Davet Modalı ──────────────────────────────────────────────
+function InviteFromConnectionsModal({ teamId, currentMembers, onClose, onInvited }: {
+  teamId: string
+  currentMembers: TeamMember[]
+  onClose: () => void
+  onInvited: (member: TeamMember) => void
+}) {
+  const [connections, setConnections] = useState<{ id: string; full_name: string; title?: string; slug?: string }[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [inviting, setInviting]       = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/network')
+      .then(r => r.json())
+      .then(data => {
+        const sent     = (data.sentConnections     ?? []).filter((c: any) => c.status === 'accepted').map((c: any) => c.addressee)
+        const received = (data.receivedConnections ?? []).filter((c: any) => c.status === 'accepted').map((c: any) => c.requester)
+        const all = [...sent, ...received].filter(Boolean)
+        const memberIds = new Set(currentMembers.map(m => m.psychologist_id))
+        const seen = new Set<string>()
+        const unique = all.filter((p: any) => {
+          if (!p?.id || memberIds.has(p.id) || seen.has(p.id)) return false
+          seen.add(p.id)
+          return true
+        })
+        setConnections(unique)
+      })
+      .catch(() => toast.error('Bağlantılar yüklenemedi'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function inviteConnection(psyId: string, name: string) {
+    setInviting(psyId)
+    try {
+      const res = await fetch('/api/network', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add_member', team_id: teamId, psychologist_id: psyId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      toast.success(`${name} takıma davet edildi!`)
+      const conn = connections.find(c => c.id === psyId)
+      onInvited({
+        id: data.id, psychologist_id: psyId, role: 'member', status: 'pending', joined_at: data.joined_at,
+        profile: { id: psyId, full_name: conn?.full_name ?? name, title: conn?.title, slug: conn?.slug },
+      })
+      setConnections(c => c.filter(x => x.id !== psyId))
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Davet gönderilemedi')
+    } finally { setInviting(null) }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+          <h3 className="font-semibold flex items-center gap-2"><UserPlus size={16} /> Bağlantıdan Davet Et</h3>
+          <button onClick={onClose} className="text-muted text-2xl leading-none hover:text-charcoal">×</button>
+        </div>
+        <div className="p-4 overflow-y-auto max-h-[60vh]">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sage" />
+            </div>
+          ) : connections.length === 0 ? (
+            <div className="py-10 text-center">
+              <Users size={32} className="mx-auto text-muted opacity-30 mb-3" />
+              <p className="text-sm text-muted">Davet edilebilecek bağlantı yok.</p>
+              <p className="text-xs text-muted mt-1">Tüm bağlantılarınız zaten bu takımda.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-border/60">
+              {connections.map(c => (
+                <li key={c.id} className="flex items-center gap-3 py-3">
+                  <div className="w-9 h-9 rounded-full bg-sage flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                    {c.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{c.full_name}</p>
+                    <p className="text-xs text-muted truncate">{c.title}</p>
+                  </div>
+                  <button
+                    onClick={() => inviteConnection(c.id, c.full_name)}
+                    disabled={inviting === c.id}
+                    className="btn-primary py-1.5 px-3 text-xs flex items-center gap-1 flex-shrink-0 disabled:opacity-60"
+                  >
+                    {inviting === c.id ? '…' : <><UserPlus size={12} /> Davet Et</>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="px-6 py-3 border-t border-border">
+          <button onClick={onClose} className="btn-outline w-full justify-center text-sm">Kapat</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Ana Bileşen ───────────────────────────────────────────────────────────────
-export default function TeamDashboardClient({ team, currentUserId, isOwner, userRole }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>('overview')
+export default function TeamDashboardClient({ team: initialTeam, currentUserId, isOwner, userRole }: Props) {
+  const [activeTab, setActiveTab]           = useState<Tab>('overview')
+  const [team, setTeam]                     = useState(initialTeam)
+  const [settingsOpen, setSettingsOpen]     = useState(false)
+  const [inviteOpen, setInviteOpen]         = useState(false)
 
   const acceptedMembers = team.members?.filter(m => m.status === 'accepted') || []
   const pendingMembers  = team.members?.filter(m => m.status === 'pending')  || []
@@ -723,7 +934,20 @@ export default function TeamDashboardClient({ team, currentUserId, isOwner, user
             <div className="flex items-center gap-2">
               <a href="/panel" className="btn-outline text-xs py-1.5 flex items-center gap-1.5">← Bireysel Panel</a>
               {isOwner && (
-                <button className="btn-outline flex items-center gap-2"><Settings className="w-4 h-4" /> Ayarlar</button>
+                <button
+                  onClick={() => setInviteOpen(true)}
+                  className="btn-outline flex items-center gap-2 text-sm"
+                >
+                  <UserPlus className="w-4 h-4" /> Davet Et
+                </button>
+              )}
+              {isOwner && (
+                <button
+                  onClick={() => setSettingsOpen(true)}
+                  className="btn-outline flex items-center gap-2 text-sm"
+                >
+                  <Settings className="w-4 h-4" /> Ayarlar
+                </button>
               )}
             </div>
           </div>
@@ -746,6 +970,23 @@ export default function TeamDashboardClient({ team, currentUserId, isOwner, user
       </div>
 
       <main className="px-4 md:px-8 py-6">{renderTabContent()}</main>
+
+      {settingsOpen && (
+        <SettingsModal
+          team={team}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={updates => setTeam(t => ({ ...t, ...updates }))}
+        />
+      )}
+
+      {inviteOpen && (
+        <InviteFromConnectionsModal
+          teamId={team.id}
+          currentMembers={allMembers}
+          onClose={() => setInviteOpen(false)}
+          onInvited={member => setTeam(t => ({ ...t, members: [...(t.members ?? []), member] }))}
+        />
+      )}
     </div>
   )
 }
