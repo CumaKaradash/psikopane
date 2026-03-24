@@ -748,7 +748,7 @@ function InviteFromConnectionsModal({ teamId, currentMembers, onClose, onInvited
       const conn = connections.find(c => c.id === psyId)
       onInvited({
         id: data.id, psychologist_id: psyId, role: 'member', status: 'pending', joined_at: data.joined_at,
-        profile: { id: psyId, full_name: conn?.full_name ?? name, title: conn?.title, slug: conn?.slug },
+        profile: { id: psyId, full_name: conn?.full_name ?? name, title: conn?.title ?? '', slug: conn?.slug ?? '' },
       })
       setConnections(c => c.filter(x => x.id !== psyId))
     } catch (err: unknown) {
