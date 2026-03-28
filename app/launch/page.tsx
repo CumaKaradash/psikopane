@@ -185,7 +185,7 @@ export default function LandingPage() {
                   <Users size={14} />
                   Uzman Bul
                 </Link>
-                <Link href="/auth/login" className="btn-primary" style={{ backgroundColor: "var(--sage)" }}>
+                <Link href="/auth" className="btn-primary" style={{ backgroundColor: "var(--sage)" }}>
                   <Lock size={14} />
                   Psikolog Olarak Giriş Yap
                 </Link>
