@@ -616,7 +616,7 @@ export default function LandingPage() {
                   <ArrowRight size={15} />
                 </Link>
                 <Link
-                  href="/auth/login"
+                  href="/auth"
                   className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold border border-white/40 text-white transition-colors hover:bg-white/10"
                 >
                   <Lock size={15} />
