@@ -5,7 +5,7 @@ import { toSlug } from '@/lib/utils'
 import { useState, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
-import { User, Link2, FileText, DollarSign, Plus, Trash2, Save, Eye, Camera, Users } from 'lucide-react'
+import { User, Link2, FileText, DollarSign, Plus, Trash2, Save, Eye, Camera, Users, Globe } from 'lucide-react'
 import type { Profile } from '@/lib/types'
 
 
@@ -167,6 +167,8 @@ export default function SettingsClient({ profile: initial }: Props) {
   const [avatarUploading, setAvatarUploading] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const [price,     setPrice]     = useState(String(initial.session_price ?? 0))
+  // "Uzman Bul" dizininde görünürlük
+  const [isListed,  setIsListed]  = useState<boolean>((initial as any).is_listed ?? false)
 
   // Seans türleri — [{ name, price }]
   const [sessionTypes, setSessionTypes] = useState<{ name: string; price: string }[]>(
@@ -258,6 +260,7 @@ export default function SettingsClient({ profile: initial }: Props) {
           avatar_url:    avatarUrl.trim() || null,
           session_types: typesPayload,
           session_price: price ? parseInt(price) : 0,
+          is_listed:     isListed,
         }),
       })
 
@@ -488,7 +491,43 @@ export default function SettingsClient({ profile: initial }: Props) {
             </div>
             <p className="text-[11px] text-muted mt-1.5">Maks. 2 MB · JPG, PNG, WebP desteklenir</p>
           </div>
-        </div>
+
+          {/* ── Uzman Bul görünürlüğü ─────────────────────────────────────── */}
+          <div
+            className="flex items-center justify-between p-4 rounded-xl border"
+            style={{
+              borderColor: isListed ? "var(--sage-l)" : "var(--border)",
+              backgroundColor: isListed ? "var(--sage-pale)" : "var(--cream)",
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <Globe size={16} style={{ color: "var(--sage)" }} />
+              <div>
+                <p className="text-sm font-medium" style={{ color: "var(--charcoal)" }}>
+                  Uzman Bul'da Görün
+                </p>
+                <p className="text-[11px]" style={{ color: "var(--muted)" }}>
+                  {isListed
+                    ? "Profiliniz uzman-bul sayfasında herkese görünür."
+                    : "Profiliniz dizinde gizlenir, yalnızca doğrudan linkinizle erişilebilir."}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsListed(v => !v)}
+              aria-label="Görünürlüğü değiştir"
+              className="w-11 h-6 rounded-full relative flex-shrink-0 transition-colors duration-200"
+              style={{ backgroundColor: isListed ? "var(--sage)" : "var(--border)" }}
+            >
+              <span
+                className="w-4 h-4 bg-white rounded-full absolute top-1 shadow-sm transition-all duration-200"
+                style={{ left: isListed ? "24px" : "4px" }}
+              />
+            </button>
+          </div>
+
+                  </div>
       )}
 
       {/* ── TAKIMLARIM ────────────────────────────────────────────────────── */}

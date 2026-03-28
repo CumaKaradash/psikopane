@@ -2,6 +2,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { ProfileSchema } from '@/lib/schemas'
+import { z } from 'zod'
+
+// ProfileSchema'yı is_listed ile genişlet
+const ExtendedProfileSchema = ProfileSchema.extend({
+  is_listed: z.boolean().optional(),
+})
+
 
 // GET — mevcut profili döndür
 export async function GET() {
@@ -26,7 +33,7 @@ export async function PATCH(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const parsed = ProfileSchema.safeParse(body)
+  const parsed = ExtendedProfileSchema.safeParse(body)
   if (!parsed.success)
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Geçersiz veri' }, { status: 400 })
 
@@ -34,6 +41,7 @@ export async function PATCH(req: Request) {
     full_name, title, email, bio,
     slug, avatar_url,
     session_types, session_price, phone,
+    is_listed,
   } = parsed.data
 
   // Slug değişiyorsa benzersizlik kontrolü
@@ -73,6 +81,7 @@ export async function PATCH(req: Request) {
   if (session_types !== undefined) updates.session_types = session_types
   if (session_price !== undefined) updates.session_price = Number(session_price)
   if (phone         !== undefined) updates.phone         = phone
+  if (is_listed     !== undefined) updates.is_listed     = is_listed
 
   if (Object.keys(updates).length === 0)
     return NextResponse.json({ error: 'Güncellenecek alan yok' }, { status: 400 })

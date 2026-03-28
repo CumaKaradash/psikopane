@@ -61,10 +61,10 @@ export default function Sidebar({ profile }: Props) {
   const SidebarContent = () => (
     <div className="w-60 bg-charcoal text-white flex flex-col h-full">
       {/* Logo */}
-      <div className="px-6 py-6 border-b border-white/10 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
         <div>
-          <h1 className="font-serif text-xl text-white">PsikoPanel</h1>
-          <p className="text-white/35 text-[11px] mt-0.5">Pratik Yönetim</p>
+          <h1 className="font-serif text-lg text-white">PsikoPanel</h1>
+          <p className="text-white/35 text-[10px] mt-0.5">Pratik Yönetim</p>
         </div>
         {/* Mobilde kapat butonu */}
         <button
@@ -77,10 +77,10 @@ export default function Sidebar({ profile }: Props) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-3">
+      <nav className="flex-1 py-1">
         {nav.map(section => (
           <div key={section.label}>
-            <p className="px-6 pt-4 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-white/25">
+            <p className="px-4 pt-2 pb-0.5 text-[10px] font-bold uppercase tracking-widest text-white/25">
               {section.label}
             </p>
             {section.items.map(({ href, icon: Icon, label }) => {
@@ -90,14 +90,14 @@ export default function Sidebar({ profile }: Props) {
                   key={href}
                   href={href}
                   onClick={() => setOpen(false)}
-                  className={`flex items-center gap-2.5 px-6 py-2.5 text-[13px] transition-all
-                    border-l-2 pl-[22px]
+                  className={`flex items-center gap-1.5 px-4 py-1.5 text-[13px] transition-all
+                    border-l-2 pl-[18px]
                     ${active
                       ? 'text-white bg-white/10 border-sage-l'
                       : 'text-white/60 hover:text-white hover:bg-white/5 border-transparent'
                     }`}
                 >
-                  <Icon size={15} />
+                  <Icon size={13} />
                   {label}
                 </Link>
               )
@@ -107,9 +107,9 @@ export default function Sidebar({ profile }: Props) {
       </nav>
 
       {/* User */}
-      <div className="px-5 py-4 border-t border-white/10">
-        <div className="flex items-center gap-2.5 mb-3">
-          <div className="w-8 h-8 rounded-full bg-sage flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+      <div className="px-3 py-2 border-t border-white/10">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <div className="w-7 h-7 rounded-full bg-sage flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">
             {initials}
           </div>
           <div className="min-w-0">
@@ -119,7 +119,7 @@ export default function Sidebar({ profile }: Props) {
         </div>
         <button
           onClick={logout}
-          className="flex items-center gap-2 text-white/40 hover:text-white/70 text-xs transition-colors w-full"
+          className="flex items-center gap-1.5 text-white/40 hover:text-white/70 text-xs transition-colors w-full"
         >
           <LogOut size={13} />
           Çıkış Yap
